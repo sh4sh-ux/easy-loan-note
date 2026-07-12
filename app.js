@@ -62,6 +62,16 @@ function bindEvents() {
   document.addEventListener("click", handleDocumentClick);
   elements.form.addEventListener("input", handleFormInput);
   elements.form.addEventListener("change", handleFormInput);
+  elements.form.addEventListener("click", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement && target.type === "date" && typeof target.showPicker === "function") {
+      try {
+        target.showPicker();
+      } catch {
+        // 브라우저가 거부하면 기본 동작(포커스)으로 둡니다.
+      }
+    }
+  });
   window.addEventListener("beforeprint", updateDocuments);
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();

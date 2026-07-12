@@ -1,9 +1,9 @@
-const CACHE_VERSION = "easy-loan-note-v4-20260712";
+const CACHE_VERSION = "easy-loan-note-v5-20260712";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=4",
-  "./app.js?v=4",
+  "./style.css?v=5",
+  "./app.js?v=5",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

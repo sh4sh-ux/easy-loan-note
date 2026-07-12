@@ -263,6 +263,7 @@ legend {
 label {
   display: grid;
   gap: 5px;
+  align-content: start;
   margin-bottom: 10px;
   color: var(--label);
   font-size: 13px;
