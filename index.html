@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#23443b" />
+    <meta name="theme-color" content="#F7F7F8" />
     <meta
       name="description"
       content="친구와 지인 사이에서 개인적으로 쓰는 모바일 차용증 작성 및 손가락 서명 웹앱"
@@ -11,7 +11,7 @@
     <title>쉬운 차용증</title>
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-    <link rel="stylesheet" href="./style.css?v=3" />
+    <link rel="stylesheet" href="./style.css?v=4" />
   </head>
   <body>
     <a class="skip-link" href="#main">본문으로 이동</a>
@@ -63,8 +63,9 @@
                     <input name="creditorName" autocomplete="name" required />
                   </label>
                   <label>
-                    생년월일
-                    <input name="creditorBirth" type="date" required />
+                    주민등록번호
+                    <input name="creditorRRN" inputmode="numeric" autocomplete="off" placeholder="000000-0000000" required />
+                    <span class="field-help">신분증과 대조해 정확히 적어주세요. 입력값은 이 기기에만 저장됩니다.</span>
                   </label>
                   <label>
                     휴대전화번호
@@ -87,8 +88,9 @@
                     <input name="debtorName" autocomplete="name" required />
                   </label>
                   <label>
-                    생년월일
-                    <input name="debtorBirth" type="date" required />
+                    주민등록번호
+                    <input name="debtorRRN" inputmode="numeric" autocomplete="off" placeholder="000000-0000000" required />
+                    <span class="field-help">돈을 갚지 않아 소송·강제집행으로 갈 때 채무자를 특정하는 핵심 정보입니다.</span>
                   </label>
                   <label>
                     휴대전화번호
@@ -102,6 +104,44 @@
                     이메일·선택
                     <input name="debtorEmail" type="email" autocomplete="email" />
                   </label>
+                </fieldset>
+              </div>
+
+              <fieldset class="segmented-field">
+                <legend>연대보증인</legend>
+                <label>
+                  <input type="radio" name="guarantorType" value="none" checked />
+                  없음
+                </label>
+                <label>
+                  <input type="radio" name="guarantorType" value="guarantor" />
+                  있음
+                </label>
+              </fieldset>
+
+              <div class="guarantor-fields" hidden>
+                <fieldset>
+                  <legend>연대보증인 정보</legend>
+                  <label>
+                    이름
+                    <input name="guarantorName" autocomplete="off" />
+                  </label>
+                  <label>
+                    주민등록번호
+                    <input name="guarantorRRN" inputmode="numeric" autocomplete="off" placeholder="000000-0000000" />
+                  </label>
+                  <label>
+                    휴대전화번호
+                    <input name="guarantorPhone" inputmode="tel" autocomplete="off" />
+                  </label>
+                  <label>
+                    주소
+                    <textarea name="guarantorAddress" rows="3"></textarea>
+                  </label>
+                  <p class="field-help">
+                    연대보증은 「민법」 제428조의2에 따라 보증인이 직접 서명한 서면이어야 효력이 있습니다.
+                    서명 단계에서 보증인 본인이 반드시 직접 서명해 주세요.
+                  </p>
                 </fieldset>
               </div>
             </section>
@@ -298,6 +338,17 @@
                   <canvas class="signature-pad" id="debtorCanvas" aria-label="채무자 서명 캔버스"></canvas>
                   <p class="signature-time" id="debtorSignTime">아직 서명하지 않았습니다.</p>
                 </section>
+
+                <section class="signature-box guarantor-sign" aria-labelledby="guarantorSignatureTitle" hidden>
+                  <div class="signature-heading">
+                    <h3 id="guarantorSignatureTitle">연대보증인 서명 (자필 필수)</h3>
+                    <button class="secondary-button small" type="button" data-clear-signature="guarantor">
+                      지우기
+                    </button>
+                  </div>
+                  <canvas class="signature-pad" id="guarantorCanvas" aria-label="연대보증인 서명 캔버스"></canvas>
+                  <p class="signature-time" id="guarantorSignTime">아직 서명하지 않았습니다.</p>
+                </section>
               </div>
             </section>
 
@@ -324,6 +375,17 @@
                   <button class="danger-button" type="button" data-action="reset">새 차용증 작성</button>
                 </div>
               </div>
+
+              <div class="boost-box">
+                <h3>차용증의 효력을 더 높이려면</h3>
+                <ul>
+                  <li><strong>공증</strong> — 공증사무소에서 「금전소비대차 공정증서」를 만들고 강제집행 인낙 문구를 넣으면, 못 받았을 때 소송 없이 바로 압류할 수 있습니다. 가장 강력한 방법입니다.</li>
+                  <li><strong>계좌이체</strong> — 돈은 반드시 계좌이체로 보내 이체 기록을 남기세요. 현금은 입증이 어렵습니다.</li>
+                  <li><strong>확정일자</strong> — 공증사무소·법원에서 확정일자를 받으면 작성 시점이 공적으로 증명됩니다.</li>
+                  <li><strong>파일 공유</strong> — 완성된 PDF를 카카오톡 등으로 서로 전송해 수신 기록을 남기고 각자 보관하세요.</li>
+                  <li><strong>독촉은 내용증명</strong> — 변제 독촉은 내용증명 우편으로 보내면 기록이 남고 소멸시효 중단에도 도움이 됩니다.</li>
+                </ul>
+              </div>
             </section>
 
             <p class="form-error" id="formError" role="alert" aria-live="assertive"></p>
@@ -340,6 +402,6 @@
       </main>
     </div>
 
-    <script src="./app.js?v=3" defer></script>
+    <script src="./app.js?v=4" defer></script>
   </body>
 </html>

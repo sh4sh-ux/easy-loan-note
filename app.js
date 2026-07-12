@@ -1,7 +1,7 @@
 "use strict";
 
-const STORAGE_KEY = "easy-loan-note:draft:v2";
-const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v2";
+const STORAGE_KEY = "easy-loan-note:draft:v3";
+const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const MAX_LEGAL_RATE = 20;
 
 const steps = ["당사자", "금액", "상환", "확인", "서명", "완료"];
@@ -12,6 +12,7 @@ const state = {
   signatures: {
     creditor: { dataUrl: "", signedAt: "" },
     debtor: { dataUrl: "", signedAt: "" },
+    guarantor: { dataUrl: "", signedAt: "" },
   },
   completed: {
     contractNumber: "",
@@ -54,6 +55,7 @@ function cacheElements() {
   elements.documentHashText = document.querySelector("#documentHashText");
   elements.creditorSignTime = document.querySelector("#creditorSignTime");
   elements.debtorSignTime = document.querySelector("#debtorSignTime");
+  elements.guarantorSignTime = document.querySelector("#guarantorSignTime");
 }
 
 function bindEvents() {
@@ -136,8 +138,12 @@ function handleFormInput(event) {
     target.value = formatAmountInput(target.value);
   }
 
-  if (target.name === "creditorPhone" || target.name === "debtorPhone") {
+  if (target.name === "creditorPhone" || target.name === "debtorPhone" || target.name === "guarantorPhone") {
     target.value = formatPhone(target.value);
+  }
+
+  if (target.name === "creditorRRN" || target.name === "debtorRRN" || target.name === "guarantorRRN") {
+    target.value = formatRRN(target.value);
   }
 
   if (target.name === "repaymentAccount") {
@@ -243,9 +249,12 @@ function updateAll() {
 function updateConditionalFields() {
   const hasInterest = state.data.interestType === "interest";
   const isInstallment = state.data.repaymentType === "installment";
+  const hasGuarantor = state.data.guarantorType === "guarantor";
   document.querySelector(".interest-fields").hidden = !hasInterest;
   document.querySelector(".lump-fields").hidden = isInstallment;
   document.querySelector(".installment-fields").hidden = !isInstallment;
+  document.querySelector(".guarantor-fields").hidden = !hasGuarantor;
+  document.querySelector(".guarantor-sign").hidden = !hasGuarantor;
 
   elements.form.elements.interestRate.required = hasInterest;
   elements.form.elements.finalDueDate.required = !isInstallment;
@@ -277,8 +286,10 @@ function updateSchedulePreview() {
 function updateSignatureTimes() {
   const creditor = state.signatures.creditor.signedAt;
   const debtor = state.signatures.debtor.signedAt;
+  const guarantor = state.signatures.guarantor?.signedAt;
   elements.creditorSignTime.textContent = creditor ? `서명 시각: ${formatKoreanDateTime(creditor)}` : "아직 서명하지 않았습니다.";
   elements.debtorSignTime.textContent = debtor ? `서명 시각: ${formatKoreanDateTime(debtor)}` : "아직 서명하지 않았습니다.";
+  elements.guarantorSignTime.textContent = guarantor ? `서명 시각: ${formatKoreanDateTime(guarantor)}` : "아직 서명하지 않았습니다.";
 }
 
 function validateCurrentStep() {
@@ -290,15 +301,26 @@ function validateCurrentStep() {
   if (state.currentStep === 0) {
     fields = [
       "creditorName",
-      "creditorBirth",
+      "creditorRRN",
       "creditorPhone",
       "creditorAddress",
       "debtorName",
-      "debtorBirth",
+      "debtorRRN",
       "debtorPhone",
       "debtorAddress",
     ];
-    message = "채권자와 채무자의 필수 정보를 모두 입력해 주세요.";
+    if (state.data.guarantorType === "guarantor") {
+      fields.push("guarantorName", "guarantorRRN", "guarantorPhone", "guarantorAddress");
+    }
+    message = "당사자의 필수 정보를 모두 입력해 주세요.";
+    const rrnFields = ["creditorRRN", "debtorRRN"];
+    if (state.data.guarantorType === "guarantor") rrnFields.push("guarantorRRN");
+    for (const name of rrnFields) {
+      const value = String(elements.form.elements[name]?.value || "").trim();
+      if (value && !/^\d{6}-\d{7}$/.test(value)) {
+        return showValidationError("주민등록번호는 000000-0000000 형식으로 입력해 주세요.", [name]);
+      }
+    }
   }
 
   if (state.currentStep === 1) {
@@ -350,6 +372,9 @@ function validateCompletion() {
   const missingSignatures = [];
   if (!state.signatures.creditor.dataUrl) missingSignatures.push("채권자 서명");
   if (!state.signatures.debtor.dataUrl) missingSignatures.push("채무자 서명");
+  if (state.data.guarantorType === "guarantor" && !state.signatures.guarantor.dataUrl) {
+    missingSignatures.push("연대보증인 서명");
+  }
   if (missingSignatures.length) {
     elements.formError.textContent = `${missingSignatures.join(", ")}이 필요합니다.`;
     return false;
@@ -410,6 +435,7 @@ function buildContractHtml() {
   const amount = data.principalNumber || 0;
   const creditor = data.creditorName || "채권자";
   const debtor = data.debtorName || "채무자";
+  const hasGuarantor = data.guarantorType === "guarantor";
   const interestText =
     data.interestType === "interest"
       ? `연 ${formatRate(data.interestRateNumber)}%의 이자를 지급합니다.`
@@ -418,6 +444,88 @@ function buildContractHtml() {
     data.repaymentType === "installment"
       ? `${data.installmentCountNumber}회에 걸쳐 나누어 갚습니다.`
       : `${formatDateKorean(data.finalDueDate)}까지 한 번에 갚습니다.`;
+  const guarantorSummary = hasGuarantor
+    ? `<p>${escapeHtml(data.guarantorName || "연대보증인")} 님이 이 채무를 연대보증합니다.</p>`
+    : "";
+
+  const partyRow = (label, creditorValue, debtorValue, guarantorValue) => {
+    const guarantorCell = hasGuarantor ? `<td>${escapeHtml(guarantorValue)}</td>` : "";
+    return `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(creditorValue)}</td><td>${escapeHtml(debtorValue)}</td>${guarantorCell}</tr>`;
+  };
+
+  const partyTable = `
+    <table>
+      <tbody>
+        <tr><th>구분</th><th>채권자</th><th>채무자</th>${hasGuarantor ? "<th>연대보증인</th>" : ""}</tr>
+        ${partyRow("이름", data.creditorName, data.debtorName, data.guarantorName)}
+        ${partyRow("주민등록번호", data.creditorRRN, data.debtorRRN, data.guarantorRRN)}
+        ${partyRow("휴대전화번호", data.creditorPhone, data.debtorPhone, data.guarantorPhone)}
+        ${partyRow("주소", data.creditorAddress, data.debtorAddress, data.guarantorAddress)}
+        ${partyRow("이메일", data.creditorEmail || "미기재", data.debtorEmail || "미기재", hasGuarantor ? "미기재" : "")}
+      </tbody>
+    </table>
+  `;
+
+  const clauses = [];
+
+  clauses.push(["당사자", partyTable]);
+
+  clauses.push([
+    "대여금",
+    `<p>채권자는 채무자에게 대여 원금 ${escapeHtml(numberToKoreanMoney(amount))}(${escapeHtml(formatWon(amount))}원)을 ${escapeHtml(formatDateKorean(data.loanDate))}에 ${escapeHtml(data.paymentMethod || "계좌이체")} 방법으로 지급하고, 채무자는 이를 이 계약에서 정한 방법으로 갚기로 합니다.</p>
+     <p>채무자의 상환 의무는 실제로 지급받은 금액을 기준으로 하며, 계좌이체 내역이나 수령 확인 기록은 대여 사실을 확인하는 자료로 사용할 수 있습니다.</p>`,
+  ]);
+
+  clauses.push(["이자", renderInterestClause(data)]);
+  clauses.push(["상환 방법", renderRepaymentClause(data)]);
+
+  clauses.push([
+    "지연손해금",
+    `<p>채무자가 약속한 날까지 돈을 갚지 않으면, 갚지 않은 원금에 대해 약속한 날의 다음 날부터 실제로 갚는 날까지 ${escapeHtml(renderLateRate(data))}의 지연손해금을 지급합니다.</p>
+     <p>지연손해금률이 법정 최고이자율을 초과하면 법정 최고이자율까지만 적용하며, 지연손해금은 아직 갚지 않은 원금을 기준으로 계산합니다.</p>`,
+  ]);
+
+  clauses.push(["기한의 이익 상실", renderAccelerationClause(data)]);
+
+  clauses.push([
+    "조기상환과 완납 확인",
+    `<p>채무자는 상환일 전이라도 원금의 전부 또는 일부를 미리 갚을 수 있습니다. 원금 일부를 미리 갚으면 그 이후의 이자는 남아 있는 원금만을 기준으로 계산합니다.</p>
+     <p>채무자가 돈을 전부 갚으면 채권자는 완납확인서 또는 영수증을 발급하고, 양쪽은 계좌이체 확인증과 상환 확인 기록을 보관하는 것이 좋습니다.</p>`,
+  ]);
+
+  if (hasGuarantor) {
+    clauses.push(["연대보증", renderGuarantorClause(data)]);
+  }
+
+  clauses.push([
+    "연락처 또는 주소 변경",
+    `<p>계약 당사자는 휴대전화번호, 주소 또는 이메일이 바뀌면 상대방에게 지체 없이 알려야 합니다. 상대방이 통지를 실제로 확인할 수 있도록 발송기록이나 수신기록을 보관합니다.</p>`,
+  ]);
+
+  clauses.push([
+    "계약 변경",
+    `<p>이 계약 내용을 변경하려면 채권자와 채무자가 변경된 내용을 확인하고 다시 서명해야 합니다. 전화나 말로만 합의한 내용은 상대방이 인정하지 않으면 계약 변경으로 보지 않습니다.</p>`,
+  ]);
+
+  clauses.push([
+    "전자문서와 전자서명",
+    `<p>계약 당사자는 이 계약서를 모바일 또는 전자문서로 작성하고 전자서명하는 것에 동의합니다. 각 당사자는 전자서명 전에 계약서 전체 내용을 확인하였으며, 서명 후 동일한 내용의 최종 계약서를 각각 보관합니다.</p>
+     <p>이 계약서는 공정증서가 아니며, 이 문서만으로 곧바로 강제집행을 할 수 있다는 뜻으로 해석하지 않습니다. 금액이 크거나 담보·보증·분쟁 가능성이 있는 거래는 전문가 검토 또는 공증을 권장합니다.</p>`,
+  ]);
+
+  clauses.push([
+    "관할법원과 분쟁 해결",
+    `<p>분쟁이 생기면 먼저 대화와 서면 협의를 통해 해결하도록 노력합니다.</p>
+     <p>협의로 해결되지 않으면 ${data.court ? escapeHtml(data.court) : "채권자의 주소지를 관할하는 법원"}을 제1심 관할법원으로 하기로 합의합니다.</p>`,
+  ]);
+
+  if (data.specialTerms) {
+    clauses.push(["추가 약속", `<p>${escapeHtml(data.specialTerms)}</p>`]);
+  }
+
+  const clausesHtml = clauses
+    .map(([title, body], index) => `<h2>제${index + 1}조 ${escapeHtml(title)}</h2>${body}`)
+    .join("");
 
   return `
     <h1>금전소비대차계약서</h1>
@@ -432,62 +540,42 @@ function buildContractHtml() {
     <p>${escapeHtml(creditor)} 님은 ${escapeHtml(debtor)} 님에게 ${escapeHtml(formatWon(amount))}원을 빌려줍니다.</p>
     <p>대여금은 ${escapeHtml(numberToKoreanMoney(amount))}으로 표시하며, ${escapeHtml(repaymentText)}</p>
     <p>${escapeHtml(interestText)} 상환금은 ${escapeHtml(data.repaymentBank || "-")} ${escapeHtml(data.repaymentAccount || "-")} 계좌로 보냅니다.</p>
+    ${guarantorSummary}
 
-    <h2>제1조 당사자</h2>
-    <table>
-      <tbody>
-        <tr><th>구분</th><th>채권자</th><th>채무자</th></tr>
-        <tr><th>이름</th><td>${escapeHtml(data.creditorName)}</td><td>${escapeHtml(data.debtorName)}</td></tr>
-        <tr><th>생년월일</th><td>${escapeHtml(formatDateKorean(data.creditorBirth))}</td><td>${escapeHtml(formatDateKorean(data.debtorBirth))}</td></tr>
-        <tr><th>휴대전화번호</th><td>${escapeHtml(data.creditorPhone)}</td><td>${escapeHtml(data.debtorPhone)}</td></tr>
-        <tr><th>주소</th><td>${escapeHtml(data.creditorAddress)}</td><td>${escapeHtml(data.debtorAddress)}</td></tr>
-        <tr><th>이메일</th><td>${escapeHtml(data.creditorEmail || "미기재")}</td><td>${escapeHtml(data.debtorEmail || "미기재")}</td></tr>
-      </tbody>
-    </table>
-
-    <h2>제2조 대여금</h2>
-    <p>채권자는 채무자에게 대여 원금 ${escapeHtml(numberToKoreanMoney(amount))}(${escapeHtml(formatWon(amount))}원)을 ${escapeHtml(formatDateKorean(data.loanDate))}에 ${escapeHtml(data.paymentMethod || "계좌이체")} 방법으로 지급하고, 채무자는 이를 이 계약에서 정한 방법으로 갚기로 합니다.</p>
-    <p>채무자의 상환 의무는 실제로 지급받은 금액을 기준으로 하며, 계좌이체 내역이나 수령 확인 기록은 대여 사실을 확인하는 자료로 사용할 수 있습니다.</p>
-
-    <h2>제3조 이자</h2>
-    ${renderInterestClause(data)}
-
-    <h2>제4조 상환 방법</h2>
-    ${renderRepaymentClause(data)}
-
-    <h2>제5조 지연손해금</h2>
-    <p>채무자가 약속한 날까지 돈을 갚지 않으면, 갚지 않은 원금에 대해 약속한 날의 다음 날부터 실제로 갚는 날까지 ${escapeHtml(renderLateRate(data))}의 지연손해금을 지급합니다.</p>
-    <p>지연손해금률이 법정 최고이자율을 초과하면 법정 최고이자율까지만 적용하며, 지연손해금은 아직 갚지 않은 원금을 기준으로 계산합니다.</p>
-
-    <h2>제6조 기한의 이익 상실</h2>
-    <p>채무자가 분할상환금을 2회 연속 갚지 않거나, 채권자가 미납 사실을 통지한 후 14일이 지나도록 갚지 않는 경우, 채권자는 남아 있는 원금과 미지급 이자를 한꺼번에 갚으라고 요구할 수 있습니다.</p>
-    <p>채권자가 위 권리를 행사하려면 채무자에게 남은 원금, 미지급 이자 및 지급기한을 문자, 이메일, 카카오톡 또는 서면으로 구체적으로 알려야 합니다.</p>
-
-    <h2>제7조 조기상환과 완납 확인</h2>
-    <p>채무자는 상환일 전이라도 원금의 전부 또는 일부를 미리 갚을 수 있습니다. 원금 일부를 미리 갚으면 그 이후의 이자는 남아 있는 원금만을 기준으로 계산합니다.</p>
-    <p>채무자가 돈을 전부 갚으면 채권자는 완납확인서 또는 영수증을 발급하고, 양쪽은 계좌이체 확인증과 상환 확인 기록을 보관하는 것이 좋습니다.</p>
-
-    <h2>제8조 연락처 또는 주소 변경</h2>
-    <p>채권자와 채무자는 휴대전화번호, 주소 또는 이메일이 바뀌면 상대방에게 지체 없이 알려야 합니다. 상대방이 통지를 실제로 확인할 수 있도록 발송기록이나 수신기록을 보관합니다.</p>
-
-    <h2>제9조 계약 변경</h2>
-    <p>이 계약 내용을 변경하려면 채권자와 채무자가 변경된 내용을 확인하고 다시 서명해야 합니다. 전화나 말로만 합의한 내용은 상대방이 인정하지 않으면 계약 변경으로 보지 않습니다.</p>
-
-    <h2>제10조 전자문서와 전자서명</h2>
-    <p>채권자와 채무자는 이 계약서를 모바일 또는 전자문서로 작성하고 전자서명하는 것에 동의합니다. 양쪽은 전자서명 전에 계약서 전체 내용을 확인하였으며, 서명 후 동일한 내용의 최종 계약서를 각각 보관합니다.</p>
-    <p>이 계약서는 공정증서가 아니며, 이 문서만으로 곧바로 강제집행을 할 수 있다는 뜻으로 해석하지 않습니다. 금액이 크거나 담보·보증·분쟁 가능성이 있는 거래는 전문가 검토 또는 공증을 권장합니다.</p>
-
-    <h2>제11조 분쟁 해결</h2>
-    <p>분쟁이 생기면 먼저 대화와 서면 협의를 통해 해결하도록 노력합니다. 협의로 해결되지 않으면 민사소송법 등 관련 법률에서 정한 관할법원에서 해결합니다.${data.court ? ` 별도 합의 관할법원은 ${escapeHtml(data.court)}입니다.` : ""}</p>
-
-    ${data.specialTerms ? `<h2>제12조 추가 약속</h2><p>${escapeHtml(data.specialTerms)}</p>` : ""}
+    ${clausesHtml}
 
     <h2>계약 체결 확인</h2>
-    <p>채권자와 채무자는 위 계약 내용을 모두 확인하고 각각 서명합니다.</p>
+    <p>계약 당사자는 위 계약 내용을 모두 확인하고 각각 서명합니다.</p>
     <div class="signature-print-grid">
       ${renderSignatureBlock("채권자", data.creditorName, state.signatures.creditor)}
       ${renderSignatureBlock("채무자", data.debtorName, state.signatures.debtor)}
+      ${hasGuarantor ? renderSignatureBlock("연대보증인", data.guarantorName, state.signatures.guarantor) : ""}
     </div>
+  `;
+}
+
+function renderAccelerationClause(data) {
+  const isInstallment = data.repaymentType === "installment";
+  const hasInterest = data.interestType === "interest";
+  const reasons = [];
+  if (isInstallment) reasons.push("분할상환금을 2회 연속 갚지 않은 때");
+  if (hasInterest) reasons.push("이자 지급을 2회 연속 지체한 때");
+  reasons.push("채권자가 미납 사실을 통지한 후 14일이 지나도록 갚지 않은 때");
+  reasons.push("채무자가 다른 채권자로부터 가압류·압류·강제집행을 당하거나 파산·회생 절차가 개시된 때");
+  reasons.push("채무자가 연락처나 주소가 바뀌었는데도 알리지 않아 연락이 닿지 않는 때");
+
+  const items = reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("");
+  return `
+    <p>채무자에게 다음 사유가 생기면 채무자는 기한의 이익을 잃고, 채권자는 남아 있는 원금과 미지급 이자를 한꺼번에 갚으라고 요구할 수 있습니다.</p>
+    <ol>${items}</ol>
+    <p>채권자가 위 권리를 행사하려면 채무자에게 남은 원금, 미지급 이자 및 지급기한을 문자, 이메일, 카카오톡 또는 서면으로 구체적으로 알려야 합니다.</p>
+  `;
+}
+
+function renderGuarantorClause(data) {
+  return `
+    <p>연대보증인 ${escapeHtml(data.guarantorName || "-")}은(는) 이 계약에 따라 채무자가 부담하는 원금, 이자 및 지연손해금 지급채무를 채무자와 연대하여 보증합니다.</p>
+    <p>연대보증인은 이 계약서의 내용을 모두 확인하였으며, 「민법」 제428조의2에 따라 보증 의사를 표시하기 위하여 이 서면에 직접 서명합니다.</p>
   `;
 }
 
@@ -594,6 +682,7 @@ function buildRepaymentSchedule(data) {
 function initializeSignatures() {
   createSignaturePad("creditor", document.querySelector("#creditorCanvas"));
   createSignaturePad("debtor", document.querySelector("#debtorCanvas"));
+  createSignaturePad("guarantor", document.querySelector("#guarantorCanvas"));
   window.addEventListener("resize", debounce(resizeAllSignatures, 160));
   window.addEventListener("orientationchange", () => setTimeout(resizeAllSignatures, 250));
 }
@@ -737,7 +826,12 @@ function restoreDraft() {
     const parsed = JSON.parse(saved);
     state.currentStep = parsed.currentStep || 0;
     state.data = parsed.data || {};
-    state.signatures = parsed.signatures || state.signatures;
+    state.signatures = {
+      creditor: { dataUrl: "", signedAt: "" },
+      debtor: { dataUrl: "", signedAt: "" },
+      guarantor: { dataUrl: "", signedAt: "" },
+      ...(parsed.signatures || {}),
+    };
     state.completed = parsed.completed || state.completed;
     applyStateToForm();
   } catch {
@@ -767,6 +861,7 @@ function resetApp() {
   state.signatures = {
     creditor: { dataUrl: "", signedAt: "" },
     debtor: { dataUrl: "", signedAt: "" },
+    guarantor: { dataUrl: "", signedAt: "" },
   };
   state.completed = { contractNumber: "", completedAt: "", documentHash: "" };
   setDefaultDates();
@@ -799,10 +894,32 @@ function createContractNumber() {
   return `LN-${date}-${time}-${random}`;
 }
 
+const STANDALONE_DOCUMENT_CSS = `
+  body { max-width: 760px; margin: 0 auto; padding: 32px 20px; color: #111;
+    font-family: -apple-system, 'SF Pro Text', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+    line-height: 1.6; word-break: keep-all; overflow-wrap: anywhere; }
+  h1 { font-size: 26px; text-align: center; margin: 0 0 20px; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  h3 { font-size: 14px; margin: 0 0 6px; }
+  p { margin: 6px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid #D4D4D8; padding: 7px 8px; text-align: left; font-size: 13px; vertical-align: top; }
+  th { background: #F3F3F5; }
+  ol { padding-left: 22px; margin: 6px 0; }
+  li { margin-bottom: 3px; }
+  .contract-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    border: 1px solid #D4D4D8; border-radius: 8px; padding: 12px; margin: 14px 0; font-size: 12.5px; }
+  .signature-print-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+  .signature-print-box { border: 1px solid #888; border-radius: 8px; padding: 12px; min-height: 150px; }
+  .signature-print-box img { display: block; max-width: 100%; height: 82px; margin: 8px 0;
+    object-fit: contain; border-bottom: 1px solid #aaa; }
+  @media print { @page { size: A4; margin: 14mm; } body { padding: 0; } }
+`;
+
 function downloadFinalHtml() {
   updateDocuments();
   const title = `easy-loan-note-${state.completed.contractNumber || "draft"}.html`;
-  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>${document.querySelector("style")?.textContent || ""}</style><link rel="stylesheet" href="./style.css"></head><body><article class="print-document" style="display:block">${elements.printDocument.innerHTML}</article></body></html>`;
+  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><style>${STANDALONE_DOCUMENT_CSS}</style></head><body><article>${elements.printDocument.innerHTML}</article></body></html>`;
   downloadBlob(title, html, "text/html;charset=utf-8");
 }
 
@@ -880,6 +997,12 @@ function koreanFourDigit(value) {
       return num ? `${nums[num]}${units[index]}` : "";
     })
     .join("");
+}
+
+function formatRRN(value) {
+  const digits = String(value || "").replace(/[^\d]/g, "").slice(0, 13);
+  if (digits.length <= 6) return digits;
+  return `${digits.slice(0, 6)}-${digits.slice(6)}`;
 }
 
 function formatPhone(value) {
