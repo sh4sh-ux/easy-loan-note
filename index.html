@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#23443b" />
+    <meta
+      name="description"
+      content="친구와 지인 사이에서 개인적으로 쓰는 모바일 차용증 작성 및 손가락 서명 웹앱"
+    />
+    <title>쉬운 차용증</title>
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <link rel="stylesheet" href="./style.css?v=3" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">본문으로 이동</a>
+
+    <div class="app-shell">
+      <header class="app-header no-print">
+        <div>
+          <p class="eyebrow">개인용 모바일 차용증</p>
+          <h1>쉬운 차용증</h1>
+        </div>
+        <button class="icon-button" type="button" id="installButton" hidden aria-label="홈 화면에 설치">
+          <span aria-hidden="true">+</span>
+        </button>
+      </header>
+
+      <main id="main">
+        <section class="intro no-print" aria-labelledby="introTitle">
+          <h2 id="introTitle">친구 사이일수록 약속은 정확하게 남겨두세요.</h2>
+          <p>
+            이 앱은 서버 없이 브라우저 안에서만 작동합니다. 입력한 개인정보와 서명은 외부로 전송되지
+            않으며, 계약 완료 후 PDF나 HTML 파일로 직접 보관합니다.
+          </p>
+          <div class="intro-actions">
+            <button class="primary-button" type="button" data-action="start">새 차용증 만들기</button>
+            <button class="secondary-button" type="button" data-action="restore">작성 중인 내용 보기</button>
+          </div>
+        </section>
+
+        <section class="workspace no-print" aria-label="차용증 작성 영역" hidden>
+          <nav class="progress" aria-label="작성 단계">
+            <ol id="stepList"></ol>
+            <div class="progress-track" aria-hidden="true">
+              <span id="progressFill"></span>
+            </div>
+          </nav>
+
+          <form id="loanForm" novalidate>
+            <section class="step-panel" data-step="0" aria-labelledby="stepPartiesTitle">
+              <div class="section-heading">
+                <p class="step-kicker">1단계</p>
+                <h2 id="stepPartiesTitle">당사자 정보</h2>
+              </div>
+
+              <div class="party-grid">
+                <fieldset>
+                  <legend>돈을 빌려주는 사람·채권자</legend>
+                  <label>
+                    이름
+                    <input name="creditorName" autocomplete="name" required />
+                  </label>
+                  <label>
+                    생년월일
+                    <input name="creditorBirth" type="date" required />
+                  </label>
+                  <label>
+                    휴대전화번호
+                    <input name="creditorPhone" inputmode="tel" autocomplete="tel" required />
+                  </label>
+                  <label>
+                    주소
+                    <textarea name="creditorAddress" rows="3" required></textarea>
+                  </label>
+                  <label>
+                    이메일·선택
+                    <input name="creditorEmail" type="email" autocomplete="email" />
+                  </label>
+                </fieldset>
+
+                <fieldset>
+                  <legend>돈을 빌리는 사람·채무자</legend>
+                  <label>
+                    이름
+                    <input name="debtorName" autocomplete="name" required />
+                  </label>
+                  <label>
+                    생년월일
+                    <input name="debtorBirth" type="date" required />
+                  </label>
+                  <label>
+                    휴대전화번호
+                    <input name="debtorPhone" inputmode="tel" autocomplete="tel" required />
+                  </label>
+                  <label>
+                    주소
+                    <textarea name="debtorAddress" rows="3" required></textarea>
+                  </label>
+                  <label>
+                    이메일·선택
+                    <input name="debtorEmail" type="email" autocomplete="email" />
+                  </label>
+                </fieldset>
+              </div>
+            </section>
+
+            <section class="step-panel" data-step="1" aria-labelledby="stepMoneyTitle" hidden>
+              <div class="section-heading">
+                <p class="step-kicker">2단계</p>
+                <h2 id="stepMoneyTitle">금액과 이자</h2>
+              </div>
+
+              <div class="field-grid">
+                <label class="span-2">
+                  대여금액
+                  <input
+                    name="principal"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    placeholder="예: 10000000"
+                    required
+                  />
+                  <span class="field-help" id="amountPreview">0원</span>
+                  <strong class="amount-korean" id="amountKorean">금 영원정</strong>
+                </label>
+                <label>
+                  돈을 지급하는 날짜
+                  <input name="loanDate" type="date" required />
+                </label>
+                <label>
+                  지급 방법
+                  <select name="paymentMethod" required>
+                    <option value="계좌이체">계좌이체</option>
+                    <option value="현금 지급">현금 지급</option>
+                    <option value="기존 지급금 확인">기존 지급금 확인</option>
+                    <option value="기타">기타</option>
+                  </select>
+                </label>
+              </div>
+
+              <fieldset class="segmented-field">
+                <legend>이자</legend>
+                <label>
+                  <input type="radio" name="interestType" value="none" checked />
+                  무이자
+                </label>
+                <label>
+                  <input type="radio" name="interestType" value="interest" />
+                  이자 있음
+                </label>
+              </fieldset>
+
+              <div class="field-grid interest-fields" hidden>
+                <label>
+                  연이율
+                  <input name="interestRate" type="number" min="0" max="20" step="0.01" inputmode="decimal" />
+                  <span class="field-help">연 20%까지 입력할 수 있습니다.</span>
+                </label>
+                <label>
+                  이자 지급 방법
+                  <select name="interestPayment">
+                    <option value="원금 상환일에 함께 지급">원금 상환일에 함께 지급</option>
+                    <option value="매월 말일 지급">매월 말일 지급</option>
+                    <option value="매월 지정일 지급">매월 지정일 지급</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <section class="step-panel" data-step="2" aria-labelledby="stepRepaymentTitle" hidden>
+              <div class="section-heading">
+                <p class="step-kicker">3단계</p>
+                <h2 id="stepRepaymentTitle">갚는 방법</h2>
+              </div>
+
+              <fieldset class="segmented-field">
+                <legend>상환 방식</legend>
+                <label>
+                  <input type="radio" name="repaymentType" value="lump" checked />
+                  한 번에 갚기
+                </label>
+                <label>
+                  <input type="radio" name="repaymentType" value="installment" />
+                  나누어 갚기
+                </label>
+              </fieldset>
+
+              <div class="field-grid lump-fields">
+                <label>
+                  최종 상환일
+                  <input name="finalDueDate" type="date" required />
+                </label>
+              </div>
+
+              <div class="field-grid installment-fields" hidden>
+                <label>
+                  첫 상환일
+                  <input name="firstInstallmentDate" type="date" />
+                </label>
+                <label>
+                  상환 회차
+                  <input name="installmentCount" type="number" min="2" max="120" step="1" inputmode="numeric" />
+                </label>
+                <div class="span-2 schedule-preview" id="schedulePreview" aria-live="polite"></div>
+              </div>
+
+              <div class="field-grid">
+                <label>
+                  상환 받을 은행
+                  <input name="repaymentBank" required />
+                </label>
+                <label>
+                  예금주
+                  <input name="repaymentHolder" required />
+                </label>
+                <label class="span-2">
+                  상환 계좌번호
+                  <input name="repaymentAccount" inputmode="numeric" autocomplete="off" required />
+                </label>
+                <label>
+                  지연손해금률
+                  <input name="lateRate" type="number" min="0" max="20" step="0.01" inputmode="decimal" />
+                  <span class="field-help">비워두면 별도로 정하지 않은 것으로 표시합니다.</span>
+                </label>
+                <label>
+                  관할법원·선택
+                  <input name="court" placeholder="예: 서울중앙지방법원" />
+                </label>
+                <label class="span-2">
+                  추가 약속·선택
+                  <textarea
+                    name="specialTerms"
+                    rows="4"
+                    placeholder="중도상환, 연락 방법 등 별도 약속이 있으면 적어주세요."
+                  ></textarea>
+                </label>
+              </div>
+            </section>
+
+            <section class="step-panel" data-step="3" aria-labelledby="stepReviewTitle" hidden>
+              <div class="section-heading">
+                <p class="step-kicker">4단계</p>
+                <h2 id="stepReviewTitle">내용 확인</h2>
+              </div>
+              <div class="notice-box">
+                <strong>확인 안내</strong>
+                <p>
+                  이 문서는 개인 간 약속을 정리하기 위한 자료이며 법률 자문을 대체하지 않습니다. 금액이
+                  크거나 담보·보증·분쟁 가능성이 있으면 전문가 검토 또는 공증을 권장합니다.
+                </p>
+              </div>
+              <article class="preview-document" id="reviewDocument" aria-live="polite"></article>
+            </section>
+
+            <section class="step-panel" data-step="4" aria-labelledby="stepSignTitle" hidden>
+              <div class="section-heading">
+                <p class="step-kicker">5단계</p>
+                <h2 id="stepSignTitle">양쪽 서명</h2>
+              </div>
+
+              <fieldset class="agreement-list">
+                <legend>필수 확인</legend>
+                <label>
+                  <input type="checkbox" name="agreeIdentity" required />
+                  서로의 신원과 연락처를 확인했습니다.
+                </label>
+                <label>
+                  <input type="checkbox" name="agreeContract" required />
+                  대여금, 이자, 상환일과 상환방법을 모두 확인했습니다.
+                </label>
+                <label>
+                  <input type="checkbox" name="agreeVoluntary" required />
+                  강요나 협박 없이 본인의 의사로 서명합니다.
+                </label>
+              </fieldset>
+
+              <div class="signature-grid">
+                <section class="signature-box" aria-labelledby="creditorSignatureTitle">
+                  <div class="signature-heading">
+                    <h3 id="creditorSignatureTitle">채권자 서명</h3>
+                    <button class="secondary-button small" type="button" data-clear-signature="creditor">
+                      지우기
+                    </button>
+                  </div>
+                  <canvas class="signature-pad" id="creditorCanvas" aria-label="채권자 서명 캔버스"></canvas>
+                  <p class="signature-time" id="creditorSignTime">아직 서명하지 않았습니다.</p>
+                </section>
+
+                <section class="signature-box" aria-labelledby="debtorSignatureTitle">
+                  <div class="signature-heading">
+                    <h3 id="debtorSignatureTitle">채무자 서명</h3>
+                    <button class="secondary-button small" type="button" data-clear-signature="debtor">
+                      지우기
+                    </button>
+                  </div>
+                  <canvas class="signature-pad" id="debtorCanvas" aria-label="채무자 서명 캔버스"></canvas>
+                  <p class="signature-time" id="debtorSignTime">아직 서명하지 않았습니다.</p>
+                </section>
+              </div>
+            </section>
+
+            <section class="step-panel" data-step="5" aria-labelledby="stepDoneTitle" hidden>
+              <div class="section-heading">
+                <p class="step-kicker">완료</p>
+                <h2 id="stepDoneTitle">계약이 완료되었습니다</h2>
+              </div>
+              <div class="completion-panel">
+                <dl>
+                  <div>
+                    <dt>계약번호</dt>
+                    <dd id="contractNumberText">-</dd>
+                  </div>
+                  <div>
+                    <dt>문서 확인값</dt>
+                    <dd id="documentHashText">-</dd>
+                  </div>
+                </dl>
+                <div class="completion-actions">
+                  <button class="primary-button" type="button" data-action="print">PDF로 저장</button>
+                  <button class="secondary-button" type="button" data-action="download-html">최종 HTML 저장</button>
+                  <button class="secondary-button" type="button" data-action="download-json">JSON 백업 저장</button>
+                  <button class="danger-button" type="button" data-action="reset">새 차용증 작성</button>
+                </div>
+              </div>
+            </section>
+
+            <p class="form-error" id="formError" role="alert" aria-live="assertive"></p>
+
+            <div class="form-nav">
+              <button class="secondary-button" type="button" data-action="prev">이전</button>
+              <button class="primary-button" type="button" data-action="next">다음</button>
+              <button class="primary-button" type="button" data-action="complete" hidden>계약 완료</button>
+            </div>
+          </form>
+        </section>
+
+        <article id="printDocument" class="print-document" aria-label="최종 계약서"></article>
+      </main>
+    </div>
+
+    <script src="./app.js?v=3" defer></script>
+  </body>
+</html>
