@@ -2,6 +2,7 @@
 
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
+const ARCHIVE_KEY = "easy-loan-note:archive:v1";
 const MAX_LEGAL_RATE = 20;
 
 const steps = ["당사자", "금액", "상환", "확인", "서명", "완료"];
@@ -14,6 +15,7 @@ const state = {
     debtor: { dataUrl: "", signedAt: "" },
     guarantor: { dataUrl: "", signedAt: "" },
   },
+  attachments: [],
   completed: {
     contractNumber: "",
     completedAt: "",
@@ -34,6 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
   restoreDraft();
   initializeSignatures();
   registerServiceWorker();
+  renderAttachmentList();
   updateAll();
 });
 
@@ -56,6 +59,10 @@ function cacheElements() {
   elements.creditorSignTime = document.querySelector("#creditorSignTime");
   elements.debtorSignTime = document.querySelector("#debtorSignTime");
   elements.guarantorSignTime = document.querySelector("#guarantorSignTime");
+  elements.archive = document.querySelector(".archive");
+  elements.archiveList = document.querySelector("#archiveList");
+  elements.attachmentInput = document.querySelector("#attachmentInput");
+  elements.attachmentList = document.querySelector("#attachmentList");
 }
 
 function bindEvents() {
@@ -71,6 +78,10 @@ function bindEvents() {
         // 브라우저가 거부하면 기본 동작(포커스)으로 둡니다.
       }
     }
+  });
+  elements.attachmentInput.addEventListener("change", async () => {
+    await handleAttachmentFiles(elements.attachmentInput.files);
+    elements.attachmentInput.value = "";
   });
   window.addEventListener("beforeprint", updateDocuments);
   window.addEventListener("beforeinstallprompt", (event) => {
@@ -102,6 +113,21 @@ function handleDocumentClick(event) {
     return;
   }
 
+  if (button.dataset.removeAttachment) {
+    removeAttachment(button.dataset.removeAttachment);
+    return;
+  }
+
+  if (button.dataset.openArchive) {
+    openArchivedContract(button.dataset.openArchive);
+    return;
+  }
+
+  if (button.dataset.deleteArchive) {
+    deleteArchivedContract(button.dataset.deleteArchive);
+    return;
+  }
+
   if (!action) return;
 
   switch (action) {
@@ -123,6 +149,21 @@ function handleDocumentClick(event) {
     case "print":
       updateDocuments();
       window.print();
+      break;
+    case "download-pdf":
+      runExport(button, downloadContractPdf);
+      break;
+    case "download-image":
+      runExport(button, downloadContractImage);
+      break;
+    case "add-attachment":
+      elements.attachmentInput.click();
+      break;
+    case "archive":
+      showArchive();
+      break;
+    case "close-archive":
+      closeArchive();
       break;
     case "download-html":
       downloadFinalHtml();
@@ -168,8 +209,21 @@ function handleFormInput(event) {
 
 function showWorkspace() {
   elements.intro.hidden = true;
+  elements.archive.hidden = true;
   elements.workspace.hidden = false;
   goToStep(state.currentStep);
+}
+
+function showArchive() {
+  renderArchiveList();
+  elements.intro.hidden = true;
+  elements.workspace.hidden = true;
+  elements.archive.hidden = false;
+}
+
+function closeArchive() {
+  elements.archive.hidden = true;
+  elements.intro.hidden = false;
 }
 
 function setDefaultDates() {
@@ -404,7 +458,12 @@ async function completeContract() {
   updateDocuments();
   updateCompletionSummary();
   localStorage.removeItem(STORAGE_KEY);
-  localStorage.setItem(COMPLETED_STORAGE_KEY, JSON.stringify(exportState()));
+  try {
+    localStorage.setItem(COMPLETED_STORAGE_KEY, JSON.stringify(exportState()));
+  } catch {
+    // 저장 공간 부족 시에도 완료 화면은 진행
+  }
+  archiveCurrentContract();
   goToStep(5);
 }
 
@@ -438,6 +497,491 @@ function updateDocuments() {
 function updateCompletionSummary() {
   elements.contractNumberText.textContent = state.completed.contractNumber || "-";
   elements.documentHashText.textContent = state.completed.documentHash || "-";
+}
+
+/* ── 첨부자료 ── */
+
+async function handleAttachmentFiles(fileList) {
+  for (const file of Array.from(fileList || [])) {
+    if (!file.type.startsWith("image/")) continue;
+    try {
+      const dataUrl = await compressImageFile(file);
+      state.attachments.push({
+        id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        name: file.name,
+        dataUrl,
+      });
+    } catch {
+      alert(`${file.name} 파일을 읽지 못했습니다.`);
+    }
+  }
+  renderAttachmentList();
+  updateDocuments();
+  scheduleSave();
+}
+
+async function compressImageFile(file) {
+  const MAX_EDGE = 1200;
+  let source;
+  try {
+    source = await createImageBitmap(file, { imageOrientation: "from-image" });
+  } catch {
+    source = await new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(image);
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("decode failed"));
+      };
+      image.src = url;
+    });
+  }
+  const width = source.width;
+  const height = source.height;
+  const scale = Math.min(1, MAX_EDGE / Math.max(width, height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(source, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.8);
+}
+
+function renderAttachmentList() {
+  if (!state.attachments.length) {
+    elements.attachmentList.innerHTML = `<p class="field-help">첨부된 사진이 없습니다.</p>`;
+    return;
+  }
+  elements.attachmentList.innerHTML = state.attachments
+    .map(
+      (attachment, index) => `
+        <div class="attachment-item">
+          <img src="${attachment.dataUrl}" alt="별첨 ${index + 1}">
+          <span class="attachment-name">별첨 ${index + 1} · ${escapeHtml(attachment.name)}</span>
+          <button class="danger-button small" type="button" data-remove-attachment="${escapeHtml(attachment.id)}">삭제</button>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function removeAttachment(id) {
+  state.attachments = state.attachments.filter((attachment) => attachment.id !== id);
+  renderAttachmentList();
+  updateDocuments();
+  scheduleSave();
+}
+
+/* ── 계약 보관함 ── */
+
+function loadArchive() {
+  try {
+    return JSON.parse(localStorage.getItem(ARCHIVE_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveArchiveList(list) {
+  localStorage.setItem(ARCHIVE_KEY, JSON.stringify(list));
+}
+
+function archiveCurrentContract() {
+  const entry = {
+    id: state.completed.contractNumber,
+    savedAt: new Date().toISOString(),
+    summary: {
+      creditor: state.data.creditorName || "-",
+      debtor: state.data.debtorName || "-",
+      amount: state.data.principalNumber || 0,
+      completedAt: state.completed.completedAt,
+    },
+    snapshot: exportState(),
+  };
+  const list = loadArchive().filter((item) => item.id !== entry.id);
+  list.unshift(entry);
+  try {
+    saveArchiveList(list);
+  } catch {
+    alert(
+      "보관함 저장 공간이 부족하여 이 계약을 보관하지 못했습니다. JSON 백업으로 저장해 두시고, 보관함에서 오래된 계약을 삭제하면 공간이 생깁니다.",
+    );
+  }
+}
+
+function renderArchiveList() {
+  const list = loadArchive();
+  if (!list.length) {
+    elements.archiveList.innerHTML = `<li class="archive-empty">보관된 계약이 없습니다. 계약을 완료하면 자동으로 저장됩니다.</li>`;
+    return;
+  }
+  elements.archiveList.innerHTML = list
+    .map(
+      (item) => `
+        <li class="archive-item">
+          <div class="archive-info">
+            <strong>${escapeHtml(item.summary.creditor)} → ${escapeHtml(item.summary.debtor)}</strong>
+            <span>${escapeHtml(formatWon(item.summary.amount))}원 · ${escapeHtml(item.summary.completedAt ? formatKoreanDateTime(item.summary.completedAt) : "-")}</span>
+            <span class="archive-id">${escapeHtml(item.id)}</span>
+          </div>
+          <div class="archive-actions">
+            <button class="secondary-button small" type="button" data-open-archive="${escapeHtml(item.id)}">열기</button>
+            <button class="danger-button small" type="button" data-delete-archive="${escapeHtml(item.id)}">삭제</button>
+          </div>
+        </li>
+      `,
+    )
+    .join("");
+}
+
+function openArchivedContract(id) {
+  const item = loadArchive().find((entry) => entry.id === id);
+  if (!item || !item.snapshot) return;
+  const snapshot = item.snapshot;
+  state.data = snapshot.data || {};
+  state.signatures = {
+    creditor: { dataUrl: "", signedAt: "" },
+    debtor: { dataUrl: "", signedAt: "" },
+    guarantor: { dataUrl: "", signedAt: "" },
+    ...(snapshot.signatures || {}),
+  };
+  state.attachments = snapshot.attachments || [];
+  state.completed = snapshot.completed || { contractNumber: "", completedAt: "", documentHash: "" };
+  applyStateToForm();
+  renderAttachmentList();
+  state.currentStep = steps.length - 1;
+  showWorkspace();
+  updateAll();
+}
+
+function deleteArchivedContract(id) {
+  if (!confirm("이 계약을 보관함에서 삭제할까요? 삭제하면 되돌릴 수 없습니다.")) return;
+  saveArchiveList(loadArchive().filter((entry) => entry.id !== id));
+  renderArchiveList();
+}
+
+/* ── 이미지·PDF 내보내기 ── */
+
+async function runExport(button, task) {
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "만드는 중…";
+  try {
+    await task();
+  } catch (error) {
+    alert(`저장에 실패했습니다: ${error && error.message ? error.message : error}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
+async function renderContractCanvas(scale = 2, pageHeightCss = 0) {
+  updateDocuments();
+  const width = 760;
+
+  const styleElement = document.createElement("style");
+  styleElement.textContent = DOC_CSS;
+
+  const holder = document.createElement("div");
+  holder.className = "contract-doc";
+  holder.style.cssText = `width:${width}px;padding:28px;box-sizing:border-box;background:#fff;`;
+  holder.innerHTML = elements.printDocument.innerHTML;
+  holder.prepend(styleElement);
+
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:absolute;left:-99999px;top:0;";
+  probe.append(holder);
+  document.body.append(probe);
+
+  // data URL 이미지도 비동기로 로드되므로, 크기 측정 전에 로드 완료를 기다린다.
+  await Promise.all(
+    Array.from(holder.querySelectorAll("img")).map((img) =>
+      img.complete
+        ? Promise.resolve()
+        : new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          }),
+    ),
+  );
+
+  // PDF용: 조항 블록이 페이지 경계에 걸리면 다음 페이지로 밀어내는 여백 삽입.
+  // DOM 측정과 SVG 렌더 사이에 줄높이 반올림 차이가 누적될 수 있어 안전 마진을 둔다.
+  if (pageHeightCss > 0) {
+    const SAFETY = 40;
+    const blocks = Array.from(holder.children).filter((el) => el.tagName !== "STYLE");
+    for (const block of blocks) {
+      const holderTop = holder.getBoundingClientRect().top;
+      const rect = block.getBoundingClientRect();
+      const top = rect.top - holderTop;
+      const bottom = top + rect.height;
+      const startPage = Math.floor(top / pageHeightCss);
+      const endPage = Math.floor((bottom - 1 + SAFETY) / pageHeightCss);
+      if (endPage > startPage && rect.height <= pageHeightCss - SAFETY - 16) {
+        const spacer = document.createElement("div");
+        spacer.style.height = `${(startPage + 1) * pageHeightCss - top + 16}px`;
+        block.before(spacer);
+      }
+    }
+  }
+
+  // SVG-이미지 컨텍스트에서는 중첩 <img>(서명·별첨)가 로드되지 않는다.
+  // 각 이미지를 같은 크기의 색상 마커 플레이스홀더로 치환하고,
+  // 렌더링된 캔버스에서 마커 픽셀을 찾아 그 위치에 실제 이미지를 합성한다.
+  // (DOM 측정 좌표는 SVG 렌더와 어긋날 수 있으므로 사용하지 않는다.)
+  const embeddedImages = [];
+  Array.from(holder.querySelectorAll("img")).forEach((img, index) => {
+    const rect = img.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      img.remove();
+      return;
+    }
+    const computed = getComputedStyle(img);
+    const placeholder = document.createElement("div");
+    placeholder.style.cssText =
+      `display:block;box-sizing:border-box;width:${rect.width}px;height:${rect.height}px;` +
+      `margin:${computed.margin};border:${computed.border};border-radius:${computed.borderRadius};`;
+    placeholder.style.borderBottom = computed.borderBottom;
+    // border-radius가 마커를 깎지 않도록 좌상단 모서리에서 12px 안쪽에 배치
+    placeholder.style.background = `linear-gradient(rgb(255,${index},254),rgb(255,${index},254)) 12px 0/10px 10px no-repeat #fff`;
+    embeddedImages.push({ src: img.getAttribute("src") || "", w: rect.width, h: rect.height, index });
+    img.replaceWith(placeholder);
+  });
+
+  const holderRect = holder.getBoundingClientRect();
+  const height = Math.ceil(holderRect.height);
+  const serialized = new XMLSerializer().serializeToString(holder);
+  probe.remove();
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
+
+  // blob: URL은 Chromium에서 캔버스를 오염시키므로 data: URL 사용
+  const baseImage = await loadImageFromSrc(
+    `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+    "계약서 이미지를 렌더링하지 못했습니다.",
+  );
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(baseImage, 0, 0, canvas.width, canvas.height);
+
+  if (embeddedImages.length) {
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    const canvasWidth = canvas.width;
+    const markers = new Map();
+    for (let y = 0; y < canvas.height && markers.size < embeddedImages.length; y += 1) {
+      for (let x = 0; x < canvasWidth; x += 1) {
+        const i = (y * canvasWidth + x) * 4;
+        if (pixels[i] === 255 && pixels[i + 2] === 254 && !markers.has(pixels[i + 1])) {
+          // 마커 내부 픽셀 재확인 (안티앨리어싱 가장자리 오탐 방지)
+          const inner = ((y + 4) * canvasWidth + (x + 4)) * 4;
+          if (pixels[inner] === 255 && pixels[inner + 2] === 254 && pixels[inner + 1] === pixels[i + 1]) {
+            markers.set(pixels[i + 1], { x, y });
+          }
+        }
+      }
+    }
+
+    for (const item of embeddedImages) {
+      const marker = markers.get(item.index);
+      if (!marker || !item.src) continue;
+      try {
+        const image = await loadImageFromSrc(item.src, "첨부 이미지를 불러오지 못했습니다.");
+        const boxX = marker.x - 12 * scale;
+        const boxY = marker.y;
+        const boxWidth = item.w * scale;
+        const boxHeight = item.h * scale;
+        context.fillStyle = "#fff";
+        context.fillRect(marker.x - 2, marker.y - 2, 14 * scale, 14 * scale);
+        const ratio = Math.min(boxWidth / image.naturalWidth, boxHeight / image.naturalHeight);
+        const drawWidth = image.naturalWidth * ratio;
+        const drawHeight = image.naturalHeight * ratio;
+        const dx = boxX + (boxWidth - drawWidth) / 2;
+        const dy = boxY + (boxHeight - drawHeight) / 2;
+        context.drawImage(image, dx, dy, drawWidth, drawHeight);
+      } catch {
+        // 개별 이미지 실패는 건너뛰고 본문은 유지
+      }
+    }
+  }
+
+  return canvas;
+}
+
+function loadImageFromSrc(src, errorMessage) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(errorMessage));
+    image.src = src;
+  });
+}
+
+async function downloadContractImage() {
+  const canvas = await renderContractCanvas(2);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("PNG 생성에 실패했습니다.");
+  await shareOrDownloadBlob(blob, `차용증-${state.completed.contractNumber || "draft"}.png`);
+}
+
+async function downloadContractPdf() {
+  const A4_WIDTH = 595.28;
+  const A4_HEIGHT = 841.89;
+  const MARGIN = 28;
+  const SCALE = 2;
+  // 슬라이스 픽셀 경계와 정확히 일치하는 페이지 높이(CSS px) 계산
+  const contentWidthPtRaw = A4_WIDTH - MARGIN * 2;
+  const contentHeightPtRaw = A4_HEIGHT - MARGIN * 2;
+  const pxPerPt = (760 * SCALE) / contentWidthPtRaw;
+  const pageHeightPx = Math.floor(contentHeightPtRaw * pxPerPt);
+  const canvas = await renderContractCanvas(SCALE, pageHeightPx / SCALE);
+  const { slices, contentWidthPt } = canvasToPageSlices(canvas, A4_WIDTH, A4_HEIGHT, MARGIN);
+  const bytes = buildPdf(slices, A4_WIDTH, A4_HEIGHT, MARGIN, contentWidthPt);
+  await shareOrDownloadBlob(new Blob([bytes], { type: "application/pdf" }), `차용증-${state.completed.contractNumber || "draft"}.pdf`);
+}
+
+function canvasToPageSlices(canvas, pageWidthPt, pageHeightPt, marginPt) {
+  const contentWidthPt = pageWidthPt - marginPt * 2;
+  const contentHeightPt = pageHeightPt - marginPt * 2;
+  const pxPerPt = canvas.width / contentWidthPt;
+  const pageHeightPx = Math.floor(contentHeightPt * pxPerPt);
+  const slices = [];
+
+  for (let y = 0; y < canvas.height; y += pageHeightPx) {
+    const sliceHeightPx = Math.min(pageHeightPx, canvas.height - y);
+    const page = document.createElement("canvas");
+    page.width = canvas.width;
+    page.height = sliceHeightPx;
+    const context = page.getContext("2d");
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, page.width, page.height);
+    context.drawImage(canvas, 0, y, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+    slices.push({
+      jpegBytes: dataUrlToBytes(page.toDataURL("image/jpeg", 0.85)),
+      widthPx: page.width,
+      heightPx: sliceHeightPx,
+      heightPt: sliceHeightPx / pxPerPt,
+    });
+  }
+
+  return { slices, contentWidthPt };
+}
+
+function dataUrlToBytes(dataUrl) {
+  const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function buildPdf(slices, pageWidthPt, pageHeightPt, marginPt, contentWidthPt) {
+  const encoder = new TextEncoder();
+  const chunks = [];
+  let offset = 0;
+  const offsets = [];
+  const pushText = (text) => {
+    const bytes = encoder.encode(text);
+    chunks.push(bytes);
+    offset += bytes.length;
+  };
+  const pushBytes = (bytes) => {
+    chunks.push(bytes);
+    offset += bytes.length;
+  };
+  const beginObject = (num) => {
+    offsets[num] = offset;
+    pushText(`${num} 0 obj\n`);
+  };
+
+  const pageObjectNums = slices.map((_, index) => 3 + index * 3);
+  const totalObjects = 2 + slices.length * 3;
+
+  pushText("%PDF-1.4\n");
+
+  beginObject(1);
+  pushText("<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+
+  beginObject(2);
+  pushText(`<< /Type /Pages /Kids [${pageObjectNums.map((n) => `${n} 0 R`).join(" ")}] /Count ${slices.length} >>\nendobj\n`);
+
+  slices.forEach((slice, index) => {
+    const pageNum = pageObjectNums[index];
+    const contentNum = pageNum + 1;
+    const imageNum = pageNum + 2;
+    const drawHeightPt = slice.heightPt;
+    const yPt = pageHeightPt - marginPt - drawHeightPt;
+
+    beginObject(pageNum);
+    pushText(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidthPt.toFixed(2)} ${pageHeightPt.toFixed(2)}] ` +
+        `/Resources << /XObject << /Im${index} ${imageNum} 0 R >> >> /Contents ${contentNum} 0 R >>\nendobj\n`,
+    );
+
+    const contentStream = `q ${contentWidthPt.toFixed(2)} 0 0 ${drawHeightPt.toFixed(2)} ${marginPt.toFixed(2)} ${yPt.toFixed(2)} cm /Im${index} Do Q`;
+    beginObject(contentNum);
+    pushText(`<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream\nendobj\n`);
+
+    beginObject(imageNum);
+    pushText(
+      `<< /Type /XObject /Subtype /Image /Width ${slice.widthPx} /Height ${slice.heightPx} ` +
+        `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${slice.jpegBytes.length} >>\nstream\n`,
+    );
+    pushBytes(slice.jpegBytes);
+    pushText("\nendstream\nendobj\n");
+  });
+
+  const xrefOffset = offset;
+  pushText(`xref\n0 ${totalObjects + 1}\n`);
+  pushText("0000000000 65535 f \n");
+  for (let num = 1; num <= totalObjects; num += 1) {
+    pushText(`${String(offsets[num]).padStart(10, "0")} 00000 n \n`);
+  }
+  pushText(`trailer\n<< /Size ${totalObjects + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`);
+
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const result = new Uint8Array(total);
+  let cursor = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, cursor);
+    cursor += chunk.length;
+  }
+  return result;
+}
+
+async function shareOrDownloadBlob(blob, filename) {
+  const isTouchDevice = window.matchMedia("(pointer: coarse)").matches;
+  if (isTouchDevice && navigator.canShare && typeof File === "function") {
+    const file = new File([blob], filename, { type: blob.type });
+    if (navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: filename });
+        return;
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+        // 공유 실패 시 파일 다운로드로 대체
+      }
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 function buildContractHtml() {
@@ -482,7 +1026,7 @@ function buildContractHtml() {
 
   clauses.push([
     "대여금",
-    `<p>채권자는 채무자에게 대여 원금 ${escapeHtml(numberToKoreanMoney(amount))}(${escapeHtml(formatWon(amount))}원)을 ${escapeHtml(formatDateKorean(data.loanDate))}에 ${escapeHtml(data.paymentMethod || "계좌이체")} 방법으로 지급하고, 채무자는 이를 이 계약에서 정한 방법으로 갚기로 합니다.</p>
+    `<p>채권자는 채무자에게 대여 원금 <strong>${escapeHtml(numberToKoreanMoney(amount))}(${escapeHtml(formatWon(amount))}원)</strong>을 <strong>${escapeHtml(formatDateKorean(data.loanDate))}</strong>에 <strong>${escapeHtml(data.paymentMethod || "계좌이체")}</strong> 방법으로 지급하고, 채무자는 이를 이 계약에서 정한 방법으로 갚기로 합니다.</p>
      <p>채무자의 상환 의무는 실제로 지급받은 금액을 기준으로 하며, 계좌이체 내역이나 수령 확인 기록은 대여 사실을 확인하는 자료로 사용할 수 있습니다.</p>`,
   ]);
 
@@ -491,7 +1035,7 @@ function buildContractHtml() {
 
   clauses.push([
     "지연손해금",
-    `<p>채무자가 약속한 날까지 돈을 갚지 않으면, 갚지 않은 원금에 대해 약속한 날의 다음 날부터 실제로 갚는 날까지 ${escapeHtml(renderLateRate(data))}의 지연손해금을 지급합니다.</p>
+    `<p>채무자가 약속한 날까지 돈을 갚지 않으면, 갚지 않은 원금에 대해 약속한 날의 다음 날부터 실제로 갚는 날까지 <strong>${escapeHtml(renderLateRate(data))}</strong>의 지연손해금을 지급합니다.</p>
      <p>지연손해금률이 법정 최고이자율을 초과하면 법정 최고이자율까지만 적용하며, 지연손해금은 아직 갚지 않은 원금을 기준으로 계산합니다.</p>`,
   ]);
 
@@ -534,7 +1078,7 @@ function buildContractHtml() {
   }
 
   const clausesHtml = clauses
-    .map(([title, body], index) => `<h2>제${index + 1}조 ${escapeHtml(title)}</h2>${body}`)
+    .map(([title, body], index) => `<section class="clause"><h2>제${index + 1}조 ${escapeHtml(title)}</h2>${body}</section>`)
     .join("");
 
   return `
@@ -546,22 +1090,44 @@ function buildContractHtml() {
       <p><strong>완료 시각</strong><br>${escapeHtml(state.completed.completedAt ? formatKoreanDateTime(state.completed.completedAt) : "계약 완료 전")}</p>
     </div>
 
-    <h2>쉬운 말 요약</h2>
-    <p>${escapeHtml(creditor)} 님은 ${escapeHtml(debtor)} 님에게 ${escapeHtml(formatWon(amount))}원을 빌려줍니다.</p>
-    <p>대여금은 ${escapeHtml(numberToKoreanMoney(amount))}으로 표시하며, ${escapeHtml(repaymentText)}</p>
-    <p>${escapeHtml(interestText)} 상환금은 ${escapeHtml(data.repaymentBank || "-")} ${escapeHtml(data.repaymentAccount || "-")} 계좌로 보냅니다.</p>
-    ${guarantorSummary}
+    <section class="clause">
+      <h2>쉬운 말 요약</h2>
+      <p>${escapeHtml(creditor)} 님은 ${escapeHtml(debtor)} 님에게 <strong>${escapeHtml(formatWon(amount))}원</strong>을 빌려줍니다.</p>
+      <p>대여금은 <strong>${escapeHtml(numberToKoreanMoney(amount))}</strong>으로 표시하며, ${escapeHtml(repaymentText)}</p>
+      <p>${escapeHtml(interestText)} 상환금은 ${escapeHtml(data.repaymentBank || "-")} ${escapeHtml(data.repaymentAccount || "-")} 계좌로 보냅니다.</p>
+      ${guarantorSummary}
+    </section>
 
     ${clausesHtml}
 
-    <h2>계약 체결 확인</h2>
-    <p>계약 당사자는 위 계약 내용을 모두 확인하고 각각 서명합니다.</p>
-    <div class="signature-print-grid">
-      ${renderSignatureBlock("채권자", data.creditorName, state.signatures.creditor)}
-      ${renderSignatureBlock("채무자", data.debtorName, state.signatures.debtor)}
-      ${hasGuarantor ? renderSignatureBlock("연대보증인", data.guarantorName, state.signatures.guarantor) : ""}
-    </div>
+    <section class="clause">
+      <h2>계약 체결 확인</h2>
+      <p>계약 당사자는 위 계약 내용을 모두 확인하고 각각 서명합니다.</p>
+      <div class="signature-print-grid">
+        ${renderSignatureBlock("채권자", data.creditorName, state.signatures.creditor)}
+        ${renderSignatureBlock("채무자", data.debtorName, state.signatures.debtor)}
+        ${hasGuarantor ? renderSignatureBlock("연대보증인", data.guarantorName, state.signatures.guarantor) : ""}
+      </div>
+    </section>
+    ${renderAttachmentSection()}
   `;
+}
+
+function renderAttachmentSection() {
+  if (!state.attachments.length) return "";
+  const figures = state.attachments
+    .map(
+      (attachment, index) => `
+        <section class="clause">
+          <figure class="attachment-print">
+            <img src="${attachment.dataUrl}" alt="별첨 ${index + 1}">
+            <figcaption>별첨 ${index + 1} · ${escapeHtml(attachment.name)}</figcaption>
+          </figure>
+        </section>
+      `,
+    )
+    .join("");
+  return `<section class="clause"><h2>별첨</h2><p>다음 자료를 이 계약서의 별첨으로 첨부합니다.</p></section>${figures}`;
 }
 
 function renderAccelerationClause(data) {
@@ -595,23 +1161,28 @@ function renderInterestClause(data) {
   }
 
   return `
-    <p>채무자는 원금에 대해 연 ${escapeHtml(formatRate(data.interestRateNumber))}%의 이자를 지급합니다. 이자는 실제로 돈을 받은 날의 다음 날부터 원금을 모두 갚는 날까지 계산합니다.</p>
-    <p>이자 지급 방법은 ${escapeHtml(data.interestPayment || "원금 상환일에 함께 지급")}으로 합니다. 약정이자와 돈을 빌려주는 대가로 받는 수수료 등의 합계가 법에서 정한 최고이자율을 초과하는 경우에는 법정 최고이자율까지만 적용합니다.</p>
+    <p>채무자는 원금에 대해 <strong>연 ${escapeHtml(formatRate(data.interestRateNumber))}%</strong>의 이자를 지급합니다. 이자는 실제로 돈을 받은 날의 다음 날부터 원금을 모두 갚는 날까지 계산합니다.</p>
+    <p>이자 지급 방법은 <strong>${escapeHtml(data.interestPayment || "원금 상환일에 함께 지급")}</strong>으로 합니다. 약정이자와 돈을 빌려주는 대가로 받는 수수료 등의 합계가 법에서 정한 최고이자율을 초과하는 경우에는 법정 최고이자율까지만 적용합니다.</p>
   `;
 }
 
 function renderRepaymentClause(data) {
+  const accountText =
+    `상환계좌는 금융기관 : <strong>${escapeHtml(data.repaymentBank || "-")}</strong>` +
+    ` / 계좌번호 : <strong>${escapeHtml(data.repaymentAccount || "-")}</strong>` +
+    ` / 예금주 : <strong>${escapeHtml(data.repaymentHolder || "-")}</strong> 입니다.`;
+
   if (data.repaymentType === "installment") {
     return `
-      <p>채무자는 아래 일정에 따라 원금을 나누어 갚습니다. 원 단위 차이는 마지막 회차에서 정리합니다.</p>
+      <p>채무자는 아래 일정에 따라 원금을 <strong>${escapeHtml(String(data.installmentCountNumber))}회</strong>에 걸쳐 나누어 갚습니다. 원 단위 차이는 마지막 회차에서 정리합니다.</p>
       ${renderScheduleTable(data.repaymentSchedule)}
-      <p>상환계좌는 ${escapeHtml(data.repaymentBank || "-")} / 예금주 ${escapeHtml(data.repaymentHolder || "-")} / 계좌번호 ${escapeHtml(data.repaymentAccount || "-")}입니다.</p>
+      <p>${accountText}</p>
     `;
   }
 
   return `
-    <p>채무자는 ${escapeHtml(formatDateKorean(data.finalDueDate))}까지 원금 전액과 지급하지 않은 이자를 한 번에 갚습니다.</p>
-    <p>상환계좌는 ${escapeHtml(data.repaymentBank || "-")} / 예금주 ${escapeHtml(data.repaymentHolder || "-")} / 계좌번호 ${escapeHtml(data.repaymentAccount || "-")}입니다.</p>
+    <p>채무자는 <strong>${escapeHtml(formatDateKorean(data.finalDueDate))}</strong>까지 원금 전액과 지급하지 않은 이자를 한 번에 갚습니다.</p>
+    <p>${accountText}</p>
   `;
 }
 
@@ -715,9 +1286,18 @@ function createSignaturePad(type, canvas) {
   signaturePads.set(type, pad);
   pad.resize();
 
+  // 안드로이드 등에서 펜·손가락 서명 중 화면 스크롤 방지
+  ["touchstart", "touchmove", "touchend"].forEach((eventType) => {
+    canvas.addEventListener(eventType, (event) => event.preventDefault(), { passive: false });
+  });
+
   canvas.addEventListener("pointerdown", (event) => {
     event.preventDefault();
-    canvas.setPointerCapture(event.pointerId);
+    try {
+      canvas.setPointerCapture(event.pointerId);
+    } catch {
+      // 일부 환경에서 포인터 캡처가 거부되어도 서명은 계속 진행
+    }
     pad.drawing = true;
     pad.lastPoint = getCanvasPoint(canvas, event);
   });
@@ -756,8 +1336,11 @@ function resizeSignatureCanvas(type) {
   const pad = signaturePads.get(type);
   if (!pad) return;
   const { canvas, context } = pad;
-  const dataUrl = state.signatures[type].dataUrl || canvas.toDataURL("image/png");
   const rect = canvas.getBoundingClientRect();
+  // 숨겨진 캔버스(크기 0)를 리사이즈하면 저장된 서명이 빈 이미지로 손상되므로 건너뛴다
+  if (rect.width < 2 || rect.height < 2) return;
+
+  const dataUrl = state.signatures[type].dataUrl;
   const ratio = window.devicePixelRatio || 1;
 
   canvas.width = Math.max(1, Math.floor(rect.width * ratio));
@@ -773,9 +1356,6 @@ function resizeSignatureCanvas(type) {
     const image = new Image();
     image.onload = () => {
       context.drawImage(image, 0, 0, rect.width, rect.height);
-      if (state.signatures[type].dataUrl) {
-        state.signatures[type].dataUrl = canvas.toDataURL("image/png");
-      }
     };
     image.src = dataUrl;
   }
@@ -842,6 +1422,7 @@ function restoreDraft() {
       guarantor: { dataUrl: "", signedAt: "" },
       ...(parsed.signatures || {}),
     };
+    state.attachments = parsed.attachments || [];
     state.completed = parsed.completed || state.completed;
     applyStateToForm();
   } catch {
@@ -852,10 +1433,11 @@ function restoreDraft() {
 function exportState() {
   readFormIntoState();
   return {
-    version: 2,
+    version: 3,
     currentStep: state.currentStep,
     data: state.data,
     signatures: state.signatures,
+    attachments: state.attachments,
     completed: state.completed,
     exportedAt: new Date().toISOString(),
   };
@@ -873,9 +1455,11 @@ function resetApp() {
     debtor: { dataUrl: "", signedAt: "" },
     guarantor: { dataUrl: "", signedAt: "" },
   };
+  state.attachments = [];
   state.completed = { contractNumber: "", completedAt: "", documentHash: "" };
   setDefaultDates();
   signaturePads.forEach((pad) => pad.clear());
+  renderAttachmentList();
   showWorkspace();
   updateAll();
 }
@@ -884,6 +1468,7 @@ async function createDocumentHash() {
   const payload = JSON.stringify({
     data: state.data,
     signatures: state.signatures,
+    attachments: state.attachments,
     contractNumber: state.completed.contractNumber,
     completedAt: state.completed.completedAt,
   });
@@ -904,32 +1489,36 @@ function createContractNumber() {
   return `LN-${date}-${time}-${random}`;
 }
 
-const STANDALONE_DOCUMENT_CSS = `
-  body { max-width: 760px; margin: 0 auto; padding: 32px 20px; color: #111;
-    font-family: -apple-system, 'SF Pro Text', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
-    line-height: 1.6; word-break: keep-all; overflow-wrap: anywhere; }
-  h1 { font-size: 26px; text-align: center; margin: 0 0 20px; }
-  h2 { font-size: 16px; margin: 22px 0 8px; }
-  h3 { font-size: 14px; margin: 0 0 6px; }
-  p { margin: 6px 0; }
-  table { width: 100%; border-collapse: collapse; margin: 8px 0; }
-  th, td { border: 1px solid #D4D4D8; padding: 7px 8px; text-align: left; font-size: 13px; vertical-align: top; }
-  th { background: #F3F3F5; }
-  ol { padding-left: 22px; margin: 6px 0; }
-  li { margin-bottom: 3px; }
-  .contract-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+const DOC_CSS = `
+  .contract-doc { color: #111; background: #fff; margin: 0;
+    font-family: -apple-system, 'SF Pro Text', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+    font-size: 14px; line-height: 22px; word-break: keep-all; overflow-wrap: anywhere; }
+  .contract-doc h1 { font-size: 26px; line-height: 36px; text-align: center; margin: 0 0 20px; }
+  .contract-doc h2 { font-size: 16px; line-height: 24px; margin: 22px 0 8px; }
+  .contract-doc h3 { font-size: 14px; line-height: 20px; margin: 0 0 6px; }
+  .contract-doc p { margin: 6px 0; }
+  .contract-doc table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  .contract-doc th, .contract-doc td { border: 1px solid #D4D4D8; padding: 7px 8px; text-align: left; font-size: 13px; vertical-align: top; }
+  .contract-doc th { background: #F3F3F5; }
+  .contract-doc ol { padding-left: 22px; margin: 6px 0; }
+  .contract-doc li { margin-bottom: 3px; }
+  .contract-doc .contract-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
     border: 1px solid #D4D4D8; border-radius: 8px; padding: 12px; margin: 14px 0; font-size: 12.5px; }
-  .signature-print-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
-  .signature-print-box { border: 1px solid #888; border-radius: 8px; padding: 12px; min-height: 150px; }
-  .signature-print-box img { display: block; max-width: 100%; height: 82px; margin: 8px 0;
+  .contract-doc .contract-meta p { margin: 0; }
+  .contract-doc .signature-print-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+  .contract-doc .signature-print-box { border: 1px solid #888; border-radius: 8px; padding: 12px; min-height: 150px; }
+  .contract-doc .signature-print-box img { display: block; max-width: 100%; height: 82px; margin: 8px 0;
     object-fit: contain; border-bottom: 1px solid #aaa; }
-  @media print { @page { size: A4; margin: 14mm; } body { padding: 0; } }
+  .contract-doc figure { margin: 0; }
+  .contract-doc .attachment-print-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 10px; }
+  .contract-doc .attachment-print img { display: block; max-width: 100%; border: 1px solid #D4D4D8; border-radius: 8px; }
+  .contract-doc .attachment-print figcaption { margin-top: 4px; font-size: 12px; color: #666; }
 `;
 
 function downloadFinalHtml() {
   updateDocuments();
   const title = `easy-loan-note-${state.completed.contractNumber || "draft"}.html`;
-  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><style>${STANDALONE_DOCUMENT_CSS}</style></head><body><article>${elements.printDocument.innerHTML}</article></body></html>`;
+  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><style>body{max-width:760px;margin:0 auto;padding:32px 20px;background:#fff}${DOC_CSS}@media print{@page{size:A4;margin:14mm}body{padding:0}}</style></head><body><article class="contract-doc">${elements.printDocument.innerHTML}</article></body></html>`;
   downloadBlob(title, html, "text/html;charset=utf-8");
 }
 
