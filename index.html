@@ -11,7 +11,7 @@
     <title>쉬운 차용증</title>
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-    <link rel="stylesheet" href="./style.css?v=6" />
+    <link rel="stylesheet" href="./style.css?v=7" />
   </head>
   <body>
     <a class="skip-link" href="#main">본문으로 이동</a>
@@ -48,6 +48,10 @@
           </div>
           <p class="field-help">완료된 계약이 이 기기에 자동으로 저장됩니다. 항목을 열면 PDF나 이미지로 다시 저장할 수 있습니다.</p>
           <ul id="archiveList" class="archive-list"></ul>
+          <div class="archive-import">
+            <button class="secondary-button small" type="button" data-action="import-json">JSON 백업 불러오기</button>
+            <input type="file" id="importJsonInput" accept="application/json,.json" hidden />
+          </div>
         </section>
 
         <section class="workspace no-print" aria-label="차용증 작성 영역" hidden>
@@ -426,6 +430,6 @@
       </main>
     </div>
 
-    <script src="./app.js?v=6" defer></script>
+    <script src="./app.js?v=7" defer></script>
   </body>
 </html>

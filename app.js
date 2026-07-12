@@ -63,6 +63,7 @@ function cacheElements() {
   elements.archiveList = document.querySelector("#archiveList");
   elements.attachmentInput = document.querySelector("#attachmentInput");
   elements.attachmentList = document.querySelector("#attachmentList");
+  elements.importJsonInput = document.querySelector("#importJsonInput");
 }
 
 function bindEvents() {
@@ -82,6 +83,11 @@ function bindEvents() {
   elements.attachmentInput.addEventListener("change", async () => {
     await handleAttachmentFiles(elements.attachmentInput.files);
     elements.attachmentInput.value = "";
+  });
+  elements.importJsonInput.addEventListener("change", async () => {
+    const file = elements.importJsonInput.files[0];
+    elements.importJsonInput.value = "";
+    if (file) await importJsonBackup(file);
   });
   window.addEventListener("beforeprint", updateDocuments);
   window.addEventListener("beforeinstallprompt", (event) => {
@@ -132,10 +138,19 @@ function handleDocumentClick(event) {
 
   switch (action) {
     case "start":
+      if (hasDraftContent()) {
+        if (confirm("작성 중인 내용이 있습니다. 지우고 새로 시작할까요?\n(취소를 누르면 이어서 작성합니다)")) {
+          clearAllState();
+        }
+      }
       showWorkspace();
+      updateAll();
       break;
     case "restore":
       showWorkspace();
+      break;
+    case "import-json":
+      elements.importJsonInput.click();
       break;
     case "prev":
       goToStep(Math.max(0, state.currentStep - 1));
@@ -202,6 +217,13 @@ function handleFormInput(event) {
   }
 
   elements.formError.textContent = "";
+
+  // 완료된 계약을 수정하면 완료 시각·문서 확인값을 무효화 (다시 '계약 완료' 필요)
+  if (state.completed.completedAt) {
+    state.completed.completedAt = "";
+    state.completed.documentHash = "";
+  }
+
   readFormIntoState();
   updateAll();
   scheduleSave();
@@ -241,8 +263,37 @@ function setDefaultDates() {
 
 function renderStepList() {
   elements.stepList.innerHTML = steps
-    .map((label, index) => `<li data-step-index="${index}">${index + 1}. ${escapeHtml(label)}</li>`)
+    .map((label, index) => `<li data-step-index="${index}" role="button" tabindex="0">${index + 1}. ${escapeHtml(label)}</li>`)
     .join("");
+  elements.stepList.addEventListener("click", (event) => {
+    const item = event.target.closest("[data-step-index]");
+    if (!item) return;
+    requestStep(Number(item.dataset.stepIndex));
+  });
+}
+
+function requestStep(target) {
+  if (!Number.isInteger(target) || target === state.currentStep) return;
+
+  // 뒤로는 자유롭게 이동
+  if (target < state.currentStep) {
+    goToStep(target);
+    return;
+  }
+
+  // 완료 화면은 '계약 완료'를 거쳐야만 진입 (완료된 계약은 바로 이동 가능)
+  const maxStep = state.completed.completedAt ? 5 : 4;
+  const cappedTarget = Math.min(target, maxStep);
+
+  // 앞으로는 중간 단계를 순차 검증하며 이동
+  while (state.currentStep < cappedTarget) {
+    if (state.currentStep < 3 && !validateCurrentStep()) return;
+    goToStep(state.currentStep + 1);
+  }
+
+  if (target > maxStep) {
+    elements.formError.textContent = "서명 단계에서 '계약 완료'를 누르면 완료 화면으로 이동합니다.";
+  }
 }
 
 function goToStep(stepIndex) {
@@ -260,7 +311,7 @@ function goToStep(stepIndex) {
   const prevButton = elements.form.querySelector('[data-action="prev"]');
   const nextButton = elements.form.querySelector('[data-action="next"]');
   const completeButton = elements.form.querySelector('[data-action="complete"]');
-  prevButton.hidden = stepIndex === 0 || stepIndex === steps.length - 1;
+  prevButton.hidden = stepIndex === 0;
   nextButton.hidden = stepIndex >= 4;
   completeButton.hidden = stepIndex !== 4;
 
@@ -457,6 +508,7 @@ async function completeContract() {
 
   updateDocuments();
   updateCompletionSummary();
+  state.currentStep = 5;
   localStorage.removeItem(STORAGE_KEY);
   try {
     localStorage.setItem(COMPLETED_STORAGE_KEY, JSON.stringify(exportState()));
@@ -1443,8 +1495,19 @@ function exportState() {
   };
 }
 
-function resetApp() {
-  if (!confirm("작성 중인 내용과 현재 서명을 지우고 새 차용증을 작성할까요?")) return;
+function hasDraftContent() {
+  readFormIntoState();
+  return Boolean(
+    state.data.creditorName ||
+      state.data.debtorName ||
+      state.data.principalNumber ||
+      state.signatures.creditor.dataUrl ||
+      state.signatures.debtor.dataUrl ||
+      state.attachments.length,
+  );
+}
+
+function clearAllState() {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(COMPLETED_STORAGE_KEY);
   elements.form.reset();
@@ -1460,8 +1523,42 @@ function resetApp() {
   setDefaultDates();
   signaturePads.forEach((pad) => pad.clear());
   renderAttachmentList();
+}
+
+function resetApp() {
+  if (!confirm("작성 중인 내용과 현재 서명을 지우고 새 차용증을 작성할까요?")) return;
+  clearAllState();
   showWorkspace();
   updateAll();
+}
+
+async function importJsonBackup(file) {
+  try {
+    const parsed = JSON.parse(await file.text());
+    if (!parsed || typeof parsed !== "object" || !parsed.data) {
+      throw new Error("백업 파일 형식이 올바르지 않습니다.");
+    }
+    state.data = parsed.data || {};
+    state.signatures = {
+      creditor: { dataUrl: "", signedAt: "" },
+      debtor: { dataUrl: "", signedAt: "" },
+      guarantor: { dataUrl: "", signedAt: "" },
+      ...(parsed.signatures || {}),
+    };
+    state.attachments = parsed.attachments || [];
+    state.completed = parsed.completed || { contractNumber: "", completedAt: "", documentHash: "" };
+    state.currentStep = state.completed.completedAt
+      ? 5
+      : Math.min(Math.max(parsed.currentStep || 0, 0), 4);
+    applyStateToForm();
+    renderAttachmentList();
+    if (state.completed.completedAt) archiveCurrentContract();
+    showWorkspace();
+    updateAll();
+    scheduleSave();
+  } catch (error) {
+    alert(`JSON 백업을 불러오지 못했습니다: ${error && error.message ? error.message : error}`);
+  }
 }
 
 async function createDocumentHash() {
