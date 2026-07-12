@@ -1,0 +1,25 @@
+{
+  "name": "쉬운 차용증",
+  "short_name": "차용증",
+  "description": "친구·지인 사이에서 개인적으로 사용하는 모바일 차용증 작성 및 서명 웹앱",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f2ea",
+  "theme_color": "#23443b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
