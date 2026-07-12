@@ -1589,27 +1589,27 @@ function createContractNumber() {
 const DOC_CSS = `
   .contract-doc { color: #111; background: #fff; margin: 0;
     font-family: -apple-system, 'SF Pro Text', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
-    font-size: 14px; line-height: 22px; word-break: keep-all; overflow-wrap: anywhere; }
-  .contract-doc h1 { font-size: 26px; line-height: 36px; text-align: center; margin: 0 0 20px; }
-  .contract-doc h2 { font-size: 16px; line-height: 24px; margin: 22px 0 8px; }
-  .contract-doc h3 { font-size: 14px; line-height: 20px; margin: 0 0 6px; }
-  .contract-doc p { margin: 6px 0; }
-  .contract-doc table { width: 100%; border-collapse: collapse; margin: 8px 0; }
-  .contract-doc th, .contract-doc td { border: 1px solid #D4D4D8; padding: 7px 8px; text-align: left; font-size: 13px; vertical-align: top; }
+    font-size: 13px; line-height: 19px; word-break: keep-all; overflow-wrap: anywhere; }
+  .contract-doc h1 { font-size: 22px; line-height: 30px; text-align: center; margin: 0 0 12px; }
+  .contract-doc h2 { font-size: 15px; line-height: 20px; margin: 14px 0 5px; }
+  .contract-doc h3 { font-size: 13px; line-height: 18px; margin: 0 0 4px; }
+  .contract-doc p { margin: 4px 0; }
+  .contract-doc table { width: 100%; border-collapse: collapse; margin: 6px 0; }
+  .contract-doc th, .contract-doc td { border: 1px solid #D4D4D8; padding: 4px 7px; text-align: left; font-size: 12px; vertical-align: top; }
   .contract-doc th { background: #F3F3F5; }
-  .contract-doc ol { padding-left: 22px; margin: 6px 0; }
-  .contract-doc li { margin-bottom: 3px; }
-  .contract-doc .contract-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-    border: 1px solid #D4D4D8; border-radius: 8px; padding: 12px; margin: 14px 0; font-size: 12.5px; }
+  .contract-doc ol { padding-left: 20px; margin: 4px 0; }
+  .contract-doc li { margin-bottom: 2px; }
+  .contract-doc .contract-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px;
+    border: 1px solid #D4D4D8; border-radius: 8px; padding: 9px 11px; margin: 10px 0; font-size: 11px; line-height: 16px; }
   .contract-doc .contract-meta p { margin: 0; }
-  .contract-doc .signature-print-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
-  .contract-doc .signature-print-box { border: 1px solid #888; border-radius: 8px; padding: 12px; min-height: 150px; }
-  .contract-doc .signature-print-box img { display: block; max-width: 100%; height: 82px; margin: 8px 0;
+  .contract-doc .signature-print-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+  .contract-doc .signature-print-box { border: 1px solid #888; border-radius: 8px; padding: 9px 11px; min-height: 112px; }
+  .contract-doc .signature-print-box img { display: block; max-width: 100%; height: 58px; margin: 6px 0;
     object-fit: contain; border-bottom: 1px solid #aaa; }
   .contract-doc figure { margin: 0; }
-  .contract-doc .attachment-print-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 10px; }
+  .contract-doc .attachment-print-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 8px; }
   .contract-doc .attachment-print img { display: block; max-width: 100%; border: 1px solid #D4D4D8; border-radius: 8px; }
-  .contract-doc .attachment-print figcaption { margin-top: 4px; font-size: 12px; color: #666; }
+  .contract-doc .attachment-print figcaption { margin-top: 3px; font-size: 11px; color: #666; }
 `;
 
 function downloadFinalHtml() {
