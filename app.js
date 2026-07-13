@@ -16,12 +16,28 @@ const state = {
     guarantor: { dataUrl: "", signedAt: "" },
   },
   attachments: [],
+  audit: [],
   completed: {
     contractNumber: "",
     completedAt: "",
     documentHash: "",
+    userAgent: "",
+    timeZone: "",
   },
 };
+
+function logEvent(label) {
+  state.audit.push({ label, at: new Date().toISOString() });
+}
+
+function logEventOnce(label) {
+  if (!state.audit.some((entry) => entry.label === label)) logEvent(label);
+}
+
+function logSignatureEvent(type) {
+  const role = { creditor: "채권자", debtor: "채무자", guarantor: "연대보증인" }[type] || type;
+  logEvent(`${role} 서명 완료`);
+}
 
 const elements = {};
 const signaturePads = new Map();
@@ -155,6 +171,7 @@ function handleDocumentClick(event) {
           clearAllState();
         }
       }
+      logEventOnce("작성 시작");
       showWorkspace();
       updateAll();
       break;
@@ -230,10 +247,21 @@ function handleFormInput(event) {
 
   elements.formError.textContent = "";
 
+  // 필수 확인(동의) 체크 시각 기록
+  const agreementLabels = {
+    agreeIdentity: "동의: 서로의 신원·연락처 확인",
+    agreeContract: "동의: 대여금·이자·상환 조건 확인",
+    agreeVoluntary: "동의: 강요 없이 본인 의사로 서명",
+  };
+  if (agreementLabels[target.name] && target.checked) {
+    logEventOnce(agreementLabels[target.name]);
+  }
+
   // 완료된 계약을 수정하면 완료 시각·문서 확인값을 무효화 (다시 '계약 완료' 필요)
   if (state.completed.completedAt) {
     state.completed.completedAt = "";
     state.completed.documentHash = "";
+    logEvent("완료 후 내용 수정");
   }
 
   readFormIntoState();
@@ -328,6 +356,7 @@ function goToStep(stepIndex) {
   completeButton.hidden = stepIndex !== 4;
 
   if (stepIndex === 3 || stepIndex === 5) updateDocuments();
+  if (stepIndex === 3) logEventOnce("계약서 전체 열람");
   if (stepIndex === 4) resizeAllSignatures();
   scheduleSave();
 }
@@ -514,8 +543,16 @@ async function completeContract() {
   readFormIntoState();
   if (!validateCompletion()) return;
 
+  logEvent("계약 완료");
   state.completed.contractNumber ||= createContractNumber();
   state.completed.completedAt = new Date().toISOString();
+  try {
+    state.completed.userAgent = navigator.userAgent || "";
+    state.completed.timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    /* 환경 정보 수집 실패는 무시 */
+  }
+  // 문서 확인값은 서명·별첨·진행기록까지 모두 확정된 뒤 계산한다
   state.completed.documentHash = await createDocumentHash();
 
   updateDocuments();
@@ -716,7 +753,8 @@ function openArchivedContract(id) {
     ...(snapshot.signatures || {}),
   };
   state.attachments = snapshot.attachments || [];
-  state.completed = snapshot.completed || { contractNumber: "", completedAt: "", documentHash: "" };
+  state.audit = snapshot.audit || [];
+  state.completed = snapshot.completed || { contractNumber: "", completedAt: "", documentHash: "", userAgent: "", timeZone: "" };
   applyStateToForm();
   renderAttachmentList();
   state.currentStep = steps.length - 1;
@@ -1178,7 +1216,34 @@ function buildContractHtml() {
         ${hasGuarantor ? renderSignatureBlock("연대보증인", data.guarantorName, state.signatures.guarantor) : ""}
       </div>
     </section>
+    ${renderAuditSection()}
     ${renderAttachmentSection()}
+  `;
+}
+
+function renderAuditSection() {
+  if (!state.audit.length && !state.completed.completedAt) return "";
+
+  const rows = state.audit
+    .map(
+      (entry) =>
+        `<tr><td>${escapeHtml(entry.label)}</td><td>${escapeHtml(formatKoreanDateTime(entry.at))}</td></tr>`,
+    )
+    .join("");
+
+  const tz = state.completed.timeZone || "기기 지역";
+  const device = state.completed.userAgent
+    ? `<p class="audit-device">작성 기기 정보: ${escapeHtml(state.completed.userAgent)}</p>`
+    : "";
+
+  return `
+    <section class="clause">
+      <h2>전자서명 진행 기록</h2>
+      <p>이 계약을 작성·확인·서명한 진행 시각입니다. 아래 시각은 계약을 작성한 기기의 시간(시간대: ${escapeHtml(tz)}) 기준이며, 공인된 시각인증(타임스탬프)은 아닙니다.</p>
+      ${rows ? `<table><thead><tr><th>기록</th><th>시각</th></tr></thead><tbody>${rows}</tbody></table>` : ""}
+      <p>문서 확인값(SHA-256)은 위 계약 내용과 당사자 서명, 별첨 자료, 이 진행 기록을 모두 포함해 계산한 값입니다. 계약서의 글자·서명·첨부 중 하나라도 바뀌면 확인값이 달라지므로, 계약이 완료된 이후 문서가 변경되지 않았음을 확인하는 자료로 사용할 수 있습니다.</p>
+      ${device}
+    </section>
   `;
 }
 
@@ -1417,6 +1482,7 @@ function createSignaturePad(type, canvas) {
       dataUrl: canvas.toDataURL("image/png"),
       signedAt: new Date().toISOString(),
     };
+    logSignatureEvent(type);
     updateSignatureTimes();
     scheduleSave();
   };
@@ -1567,6 +1633,7 @@ function confirmSignModal() {
     dataUrl: signModalPad.canvas.toDataURL("image/png"),
     signedAt: new Date().toISOString(),
   };
+  logSignatureEvent(type);
   closeSignModal();
   signaturePads.get(type)?.resize();
   updateSignatureTimes();
@@ -1677,6 +1744,7 @@ function restoreDraft() {
       ...(parsed.signatures || {}),
     };
     state.attachments = parsed.attachments || [];
+    state.audit = parsed.audit || [];
     state.completed = parsed.completed || state.completed;
     applyStateToForm();
   } catch {
@@ -1687,11 +1755,12 @@ function restoreDraft() {
 function exportState() {
   readFormIntoState();
   return {
-    version: 3,
+    version: 4,
     currentStep: state.currentStep,
     data: state.data,
     signatures: state.signatures,
     attachments: state.attachments,
+    audit: state.audit,
     completed: state.completed,
     exportedAt: new Date().toISOString(),
   };
@@ -1721,7 +1790,8 @@ function clearAllState() {
     guarantor: { dataUrl: "", signedAt: "" },
   };
   state.attachments = [];
-  state.completed = { contractNumber: "", completedAt: "", documentHash: "" };
+  state.audit = [];
+  state.completed = { contractNumber: "", completedAt: "", documentHash: "", userAgent: "", timeZone: "" };
   setDefaultDates();
   signaturePads.forEach((pad) => pad.clear());
   renderAttachmentList();
@@ -1748,7 +1818,8 @@ async function importJsonBackup(file) {
       ...(parsed.signatures || {}),
     };
     state.attachments = parsed.attachments || [];
-    state.completed = parsed.completed || { contractNumber: "", completedAt: "", documentHash: "" };
+    state.audit = parsed.audit || [];
+    state.completed = parsed.completed || { contractNumber: "", completedAt: "", documentHash: "", userAgent: "", timeZone: "" };
     state.currentStep = state.completed.completedAt
       ? 5
       : Math.min(Math.max(parsed.currentStep || 0, 0), 4);
@@ -1768,8 +1839,11 @@ async function createDocumentHash() {
     data: state.data,
     signatures: state.signatures,
     attachments: state.attachments,
+    audit: state.audit,
     contractNumber: state.completed.contractNumber,
     completedAt: state.completed.completedAt,
+    userAgent: state.completed.userAgent,
+    timeZone: state.completed.timeZone,
   });
   const bytes = new TextEncoder().encode(payload);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -1812,6 +1886,7 @@ const DOC_CSS = `
   .contract-doc .attachment-print-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 8px; }
   .contract-doc .attachment-print img { display: block; max-width: 100%; border: 1px solid #D4D4D8; border-radius: 8px; }
   .contract-doc .attachment-print figcaption { margin-top: 3px; font-size: 11px; color: #666; }
+  .contract-doc .audit-device { margin-top: 4px; font-size: 10.5px; color: #888; overflow-wrap: anywhere; }
 `;
 
 function downloadFinalHtml() {
