@@ -11,7 +11,7 @@
     <title>쉬운 차용증</title>
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-    <link rel="stylesheet" href="./style.css?v=11" />
+    <link rel="stylesheet" href="./style.css?v=13" />
   </head>
   <body>
     <a class="skip-link" href="#main">본문으로 이동</a>
@@ -394,6 +394,10 @@
                     <dd id="documentHashText">-</dd>
                   </div>
                 </dl>
+                <label class="audit-toggle">
+                  <input type="checkbox" id="includeAuditToggle" />
+                  <span>전자서명 진행 기록을 계약서에 포함<br /><small>열람·동의·서명 시각 타임라인. 기본은 미포함(더 짧은 계약서), 필요할 때만 켜세요.</small></span>
+                </label>
                 <div class="completion-actions">
                   <button class="primary-button" type="button" data-action="download-pdf">PDF 저장</button>
                   <button class="primary-button" type="button" data-action="download-image">이미지 저장</button>
@@ -445,6 +449,6 @@
       </div>
     </div>
 
-    <script src="./app.js?v=11" defer></script>
+    <script src="./app.js?v=13" defer></script>
   </body>
 </html>

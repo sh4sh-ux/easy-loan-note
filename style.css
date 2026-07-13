@@ -800,6 +800,39 @@ figure {
   font-size: 12.5px;
 }
 
+.audit-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--sep);
+  border-radius: var(--rm);
+  background: var(--card);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.audit-toggle input {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  margin-top: 1px;
+  padding: 0;
+  accent-color: var(--blue);
+  -webkit-appearance: auto;
+  appearance: auto;
+}
+
+.audit-toggle small {
+  display: block;
+  margin-top: 3px;
+  color: var(--label2);
+  font-weight: 400;
+  line-height: 1.5;
+}
+
 .form-error {
   min-height: 40px;
   margin: 12px 0 0;

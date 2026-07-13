@@ -17,6 +17,7 @@ const state = {
   },
   attachments: [],
   audit: [],
+  includeAudit: false,
   completed: {
     contractNumber: "",
     completedAt: "",
@@ -84,6 +85,7 @@ function cacheElements() {
   elements.signModalTitle = document.querySelector("#signModalTitle");
   elements.signModalStage = document.querySelector("#signModalStage");
   elements.signModalCanvas = document.querySelector("#signModalCanvas");
+  elements.includeAuditToggle = document.querySelector("#includeAuditToggle");
 }
 
 function bindEvents() {
@@ -108,6 +110,11 @@ function bindEvents() {
     const file = elements.importJsonInput.files[0];
     elements.importJsonInput.value = "";
     if (file) await importJsonBackup(file);
+  });
+  elements.includeAuditToggle.addEventListener("change", () => {
+    state.includeAudit = elements.includeAuditToggle.checked;
+    updateDocuments();
+    persistCompleted();
   });
   window.addEventListener("beforeprint", updateDocuments);
   window.addEventListener("beforeinstallprompt", (event) => {
@@ -356,6 +363,7 @@ function goToStep(stepIndex) {
   completeButton.hidden = stepIndex !== 4;
 
   if (stepIndex === 3 || stepIndex === 5) updateDocuments();
+  if (stepIndex === 5) updateCompletionSummary();
   if (stepIndex === 3) logEventOnce("계약서 전체 열람");
   if (stepIndex === 4) resizeAllSignatures();
   scheduleSave();
@@ -598,6 +606,17 @@ function updateDocuments() {
 function updateCompletionSummary() {
   elements.contractNumberText.textContent = state.completed.contractNumber || "-";
   elements.documentHashText.textContent = state.completed.documentHash || "-";
+  if (elements.includeAuditToggle) elements.includeAuditToggle.checked = state.includeAudit;
+}
+
+function persistCompleted() {
+  if (!state.completed.completedAt) return;
+  try {
+    localStorage.setItem(COMPLETED_STORAGE_KEY, JSON.stringify(exportState()));
+  } catch {
+    /* 저장 공간 부족은 무시 */
+  }
+  archiveCurrentContract();
 }
 
 /* ── 첨부자료 ── */
@@ -754,6 +773,7 @@ function openArchivedContract(id) {
   };
   state.attachments = snapshot.attachments || [];
   state.audit = snapshot.audit || [];
+  state.includeAudit = Boolean(snapshot.includeAudit);
   state.completed = snapshot.completed || { contractNumber: "", completedAt: "", documentHash: "", userAgent: "", timeZone: "" };
   applyStateToForm();
   renderAttachmentList();
@@ -1068,7 +1088,8 @@ async function shareOrDownloadBlob(blob, filename) {
     const file = new File([blob], filename, { type: blob.type });
     if (navigator.canShare({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: filename });
+        // 파일만 공유 — title/text를 넣지 않아야 메시지 앱에서 문자 없이 이미지만 전송된다
+        await navigator.share({ files: [file] });
         return;
       } catch (error) {
         if (error && error.name === "AbortError") return;
@@ -1222,6 +1243,7 @@ function buildContractHtml() {
 }
 
 function renderAuditSection() {
+  if (!state.includeAudit) return "";
   if (!state.audit.length && !state.completed.completedAt) return "";
 
   const rows = state.audit
@@ -1239,7 +1261,7 @@ function renderAuditSection() {
   return `
     <section class="clause">
       <h2>전자서명 진행 기록</h2>
-      <p>이 계약을 작성·확인·서명한 진행 시각입니다. 아래 시각은 계약을 작성한 기기의 시간(시간대: ${escapeHtml(tz)}) 기준이며, 공인된 시각인증(타임스탬프)은 아닙니다.</p>
+      <p>이 계약을 작성·확인·서명한 진행 시각입니다. (시간대: ${escapeHtml(tz)})</p>
       ${rows ? `<table><thead><tr><th>기록</th><th>시각</th></tr></thead><tbody>${rows}</tbody></table>` : ""}
       <p>문서 확인값(SHA-256)은 위 계약 내용과 당사자 서명, 별첨 자료, 이 진행 기록을 모두 포함해 계산한 값입니다. 계약서의 글자·서명·첨부 중 하나라도 바뀌면 확인값이 달라지므로, 계약이 완료된 이후 문서가 변경되지 않았음을 확인하는 자료로 사용할 수 있습니다.</p>
       ${device}
@@ -1745,6 +1767,7 @@ function restoreDraft() {
     };
     state.attachments = parsed.attachments || [];
     state.audit = parsed.audit || [];
+    state.includeAudit = Boolean(parsed.includeAudit);
     state.completed = parsed.completed || state.completed;
     applyStateToForm();
   } catch {
@@ -1761,6 +1784,7 @@ function exportState() {
     signatures: state.signatures,
     attachments: state.attachments,
     audit: state.audit,
+    includeAudit: state.includeAudit,
     completed: state.completed,
     exportedAt: new Date().toISOString(),
   };
@@ -1791,6 +1815,7 @@ function clearAllState() {
   };
   state.attachments = [];
   state.audit = [];
+  state.includeAudit = false;
   state.completed = { contractNumber: "", completedAt: "", documentHash: "", userAgent: "", timeZone: "" };
   setDefaultDates();
   signaturePads.forEach((pad) => pad.clear());
@@ -1819,6 +1844,7 @@ async function importJsonBackup(file) {
     };
     state.attachments = parsed.attachments || [];
     state.audit = parsed.audit || [];
+    state.includeAudit = Boolean(parsed.includeAudit);
     state.completed = parsed.completed || { contractNumber: "", completedAt: "", documentHash: "", userAgent: "", timeZone: "" };
     state.currentStep = state.completed.completedAt
       ? 5
