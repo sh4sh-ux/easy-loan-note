@@ -11,7 +11,7 @@
     <title>쉬운 차용증</title>
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-    <link rel="stylesheet" href="./style.css?v=9" />
+    <link rel="stylesheet" href="./style.css?v=10" />
   </head>
   <body>
     <a class="skip-link" href="#main">본문으로 이동</a>
@@ -79,7 +79,7 @@
                   <label>
                     주민등록번호
                     <input name="creditorRRN" inputmode="numeric" autocomplete="off" placeholder="000000-0000000" required />
-                    <span class="field-help">완성된 계약서에는 개인정보 보호를 위해 <b>뒤 6자리가 가려진 채(770101-1******)</b> 표시됩니다. 입력값은 이 기기에만 저장됩니다.</span>
+                    <span class="field-help">신분증과 대조해 정확히 적어주세요. 입력값은 외부로 전송되지 않고 이 기기에만 저장됩니다.</span>
                   </label>
                   <label>
                     휴대전화번호
@@ -104,7 +104,7 @@
                   <label>
                     주민등록번호
                     <input name="debtorRRN" inputmode="numeric" autocomplete="off" placeholder="000000-0000000" required />
-                    <span class="field-help">채무자를 특정하는 정보입니다. 계약서에는 <b>뒤 6자리가 가려진 채(920302-1******)</b> 표시되고, 전체 번호는 이 기기에만 저장됩니다.</span>
+                    <span class="field-help">돈을 갚지 않아 소송·강제집행으로 갈 때 채무자를 특정하는 핵심 정보입니다. 이 기기에만 저장됩니다.</span>
                   </label>
                   <label>
                     휴대전화번호
@@ -430,6 +430,21 @@
       </main>
     </div>
 
-    <script src="./app.js?v=9" defer></script>
+    <div class="sign-modal no-print" id="signModal" role="dialog" aria-modal="true" aria-labelledby="signModalTitle" hidden>
+      <div class="sign-modal-top">
+        <span class="sign-modal-title" id="signModalTitle">서명</span>
+        <span class="sign-modal-hint">아래 칸에 서명한 뒤 [확인]을 누르세요</span>
+      </div>
+      <div class="sign-modal-stage" id="signModalStage">
+        <canvas id="signModalCanvas" aria-label="서명 입력 캔버스"></canvas>
+      </div>
+      <div class="sign-modal-bar">
+        <button class="secondary-button" type="button" data-sign-modal="cancel">취소</button>
+        <button class="secondary-button" type="button" data-sign-modal="clear">다시</button>
+        <button class="primary-button" type="button" data-sign-modal="confirm">확인</button>
+      </div>
+    </div>
+
+    <script src="./app.js?v=10" defer></script>
   </body>
 </html>

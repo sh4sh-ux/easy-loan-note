@@ -637,6 +637,78 @@ th {
   font-size: 12px;
 }
 
+.signature-pad.tap-to-sign {
+  cursor: pointer;
+}
+
+/* ── 전체화면 서명 모달 (모바일 가로 서명) ── */
+.sign-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+}
+
+.sign-modal[hidden] {
+  display: none !important;
+}
+
+.sign-modal-top {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: max(10px, env(safe-area-inset-top)) 16px 10px;
+  border-bottom: 1px solid var(--sep);
+}
+
+.sign-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.sign-modal-hint {
+  font-size: 12px;
+  color: var(--label2);
+}
+
+.sign-modal-stage {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fill2);
+}
+
+#signModalCanvas {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  background: #fff;
+  border: 1.5px dashed var(--sep2);
+  border-radius: 8px;
+}
+
+.sign-modal-bar {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--sep);
+}
+
+.sign-modal-bar button {
+  flex: 1;
+}
+
+.sign-modal-bar .primary-button {
+  flex: 1.5;
+}
+
 /* ── 첨부자료 ── */
 .attachment-list {
   display: grid;

@@ -64,6 +64,10 @@ function cacheElements() {
   elements.attachmentInput = document.querySelector("#attachmentInput");
   elements.attachmentList = document.querySelector("#attachmentList");
   elements.importJsonInput = document.querySelector("#importJsonInput");
+  elements.signModal = document.querySelector("#signModal");
+  elements.signModalTitle = document.querySelector("#signModalTitle");
+  elements.signModalStage = document.querySelector("#signModalStage");
+  elements.signModalCanvas = document.querySelector("#signModalCanvas");
 }
 
 function bindEvents() {
@@ -112,10 +116,18 @@ function handleDocumentClick(event) {
   const clearSignature = button.dataset.clearSignature;
 
   if (clearSignature) {
-    signaturePads.get(clearSignature)?.clear();
     state.signatures[clearSignature] = { dataUrl: "", signedAt: "" };
+    signaturePads.get(clearSignature)?.clear();
     updateSignatureTimes();
     scheduleSave();
+    return;
+  }
+
+  if (button.dataset.signModal) {
+    const modalAction = button.dataset.signModal;
+    if (modalAction === "confirm") confirmSignModal();
+    else if (modalAction === "clear") signModalPad?.clear();
+    else if (modalAction === "cancel") closeSignModal();
     return;
   }
 
@@ -1036,13 +1048,6 @@ async function shareOrDownloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-function maskRRN(value) {
-  const raw = String(value || "").trim();
-  const match = raw.match(/^(\d{6})-?(\d)\d{6}$/);
-  if (match) return `${match[1]}-${match[2]}******`;
-  return raw || "미기재";
-}
-
 function buildContractHtml() {
   const data = state.data;
   const amount = data.principalNumber || 0;
@@ -1071,7 +1076,7 @@ function buildContractHtml() {
       <tbody>
         <tr><th>구분</th><th>채권자</th><th>채무자</th>${hasGuarantor ? "<th>연대보증인</th>" : ""}</tr>
         ${partyRow("이름", data.creditorName, data.debtorName, data.guarantorName)}
-        ${partyRow("주민등록번호", maskRRN(data.creditorRRN), maskRRN(data.debtorRRN), maskRRN(data.guarantorRRN))}
+        ${partyRow("주민등록번호", data.creditorRRN || "미기재", data.debtorRRN || "미기재", data.guarantorRRN || "미기재")}
         ${partyRow("휴대전화번호", data.creditorPhone, data.debtorPhone, data.guarantorPhone)}
         ${partyRow("주소", data.creditorAddress, data.debtorAddress, data.guarantorAddress)}
         ${partyRow("이메일", data.creditorEmail || "미기재", data.debtorEmail || "미기재", hasGuarantor ? "미기재" : "")}
@@ -1356,6 +1361,8 @@ function initializeSignatures() {
   window.addEventListener("orientationchange", () => setTimeout(resizeAllSignatures, 250));
 }
 
+const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+
 function createSignaturePad(type, canvas) {
   const context = canvas.getContext("2d");
   const pad = {
@@ -1367,18 +1374,21 @@ function createSignaturePad(type, canvas) {
     clear: () => {
       const ratio = window.devicePixelRatio || 1;
       context.clearRect(0, 0, canvas.width / ratio, canvas.height / ratio);
-      drawSignatureGuide(context, canvas);
+      resizeSignatureCanvas(type);
     },
   };
 
   signaturePads.set(type, pad);
   pad.resize();
 
-  // 안드로이드 등에서 펜·손가락 서명 중 화면 스크롤 방지
-  ["touchstart", "touchmove", "touchend"].forEach((eventType) => {
-    canvas.addEventListener(eventType, (event) => event.preventDefault(), { passive: false });
-  });
+  // 모바일(터치): 서명란을 탭하면 전체화면 가로 서명창을 연다 (스크롤 방지 + 넓은 서명 공간)
+  if (isCoarsePointer) {
+    canvas.classList.add("tap-to-sign");
+    canvas.addEventListener("click", () => openSignModal(type));
+    return;
+  }
 
+  // 데스크탑(마우스): 서명란에 직접 그린다
   canvas.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     try {
@@ -1416,6 +1426,153 @@ function createSignaturePad(type, canvas) {
   canvas.addEventListener("pointerleave", finish);
 }
 
+/* ── 전체화면 가로 서명 모달 (모바일) ── */
+
+let signModalType = null;
+let signModalPad = null;
+
+function openSignModal(type) {
+  signModalType = type;
+  const roleLabel = { creditor: "채권자", debtor: "채무자", guarantor: "연대보증인" }[type] || "";
+  elements.signModalTitle.textContent = `${roleLabel} 서명`;
+  elements.signModal.hidden = false;
+  document.body.style.overflow = "hidden";
+  // 레이아웃이 반영된 뒤 캔버스 크기를 잡는다
+  requestAnimationFrame(() => setupSignModalPad());
+}
+
+function closeSignModal() {
+  elements.signModal.hidden = true;
+  document.body.style.overflow = "";
+  signModalType = null;
+  signModalPad = null;
+}
+
+function setupSignModalPad() {
+  const canvas = elements.signModalCanvas;
+  const stage = elements.signModalStage;
+  const stageRect = stage.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const portrait = window.innerHeight >= window.innerWidth;
+
+  // 세로 화면에서는 캔버스를 90° 돌려 가로로 넓게 서명하도록 한다
+  const pad = 10;
+  let cssW;
+  let cssH;
+  if (portrait) {
+    cssW = Math.max(1, Math.round(stageRect.height - pad * 2));
+    cssH = Math.max(1, Math.round(stageRect.width - pad * 2));
+    canvas.style.transform = "rotate(90deg)";
+  } else {
+    cssW = Math.max(1, Math.round(stageRect.width - pad * 2));
+    cssH = Math.max(1, Math.round(stageRect.height - pad * 2));
+    canvas.style.transform = "none";
+  }
+  canvas.style.width = `${cssW}px`;
+  canvas.style.height = `${cssH}px`;
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 2.8;
+  ctx.strokeStyle = "#101040";
+
+  const drawGuide = () => {
+    ctx.save();
+    ctx.strokeStyle = "rgba(35, 68, 59, 0.16)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cssW * 0.06, cssH * 0.72);
+    ctx.lineTo(cssW * 0.94, cssH * 0.72);
+    ctx.stroke();
+    ctx.restore();
+  };
+  drawGuide();
+
+  let drawing = false;
+  let lastPoint = null;
+  let hasInk = false;
+
+  const toLocal = (clientX, clientY) => {
+    const rect = canvas.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const style = getComputedStyle(canvas);
+    const matrix = new DOMMatrix(style.transform === "none" ? "" : style.transform);
+    const point = matrix.inverse().transformPoint(new DOMPoint(clientX - cx, clientY - cy));
+    return { x: point.x + canvas.offsetWidth / 2, y: point.y + canvas.offsetHeight / 2 };
+  };
+
+  ["touchstart", "touchmove", "touchend"].forEach((eventType) => {
+    canvas.addEventListener(eventType, (event) => event.preventDefault(), { passive: false });
+  });
+
+  canvas.onpointerdown = (event) => {
+    event.preventDefault();
+    try {
+      canvas.setPointerCapture(event.pointerId);
+    } catch {
+      /* 캡처 거부되어도 계속 진행 */
+    }
+    drawing = true;
+    lastPoint = toLocal(event.clientX, event.clientY);
+    // 점 하나만 찍어도 획으로 인식되도록 시작점을 찍는다
+    ctx.beginPath();
+    ctx.moveTo(lastPoint.x, lastPoint.y);
+    ctx.lineTo(lastPoint.x + 0.1, lastPoint.y + 0.1);
+    ctx.stroke();
+    hasInk = true;
+  };
+  canvas.onpointermove = (event) => {
+    if (!drawing) return;
+    event.preventDefault();
+    const point = toLocal(event.clientX, event.clientY);
+    ctx.beginPath();
+    ctx.moveTo(lastPoint.x, lastPoint.y);
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+    lastPoint = point;
+    hasInk = true;
+  };
+  const stop = (event) => {
+    if (!drawing) return;
+    event.preventDefault();
+    drawing = false;
+    lastPoint = null;
+  };
+  canvas.onpointerup = stop;
+  canvas.onpointercancel = stop;
+
+  signModalPad = {
+    canvas,
+    isBlank: () => !hasInk,
+    clear: () => {
+      ctx.clearRect(0, 0, cssW, cssH);
+      drawGuide();
+      hasInk = false;
+    },
+  };
+}
+
+function confirmSignModal() {
+  if (!signModalPad || signModalPad.isBlank()) {
+    alert("서명을 입력한 뒤 [확인]을 눌러 주세요.");
+    return;
+  }
+  const type = signModalType;
+  state.signatures[type] = {
+    dataUrl: signModalPad.canvas.toDataURL("image/png"),
+    signedAt: new Date().toISOString(),
+  };
+  closeSignModal();
+  signaturePads.get(type)?.resize();
+  updateSignatureTimes();
+  scheduleSave();
+}
+
 function resizeAllSignatures() {
   signaturePads.forEach((pad) => pad.resize());
 }
@@ -1446,6 +1603,15 @@ function resizeSignatureCanvas(type) {
       context.drawImage(image, 0, 0, rect.width, rect.height);
     };
     image.src = dataUrl;
+  } else if (isCoarsePointer) {
+    // 모바일: 서명 전에는 '탭하여 서명' 안내를 표시
+    context.save();
+    context.fillStyle = "rgba(60, 60, 67, 0.45)";
+    context.font = "600 14px -apple-system, 'Apple SD Gothic Neo', sans-serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText("탭하여 서명", rect.width / 2, rect.height * 0.44);
+    context.restore();
   }
 }
 
