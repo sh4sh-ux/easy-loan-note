@@ -154,6 +154,11 @@ function handleDocumentClick(event) {
     return;
   }
 
+  if (button.dataset.postcode) {
+    openPostcodeSearch(button.dataset.postcode);
+    return;
+  }
+
   if (button.dataset.removeAttachment) {
     removeAttachment(button.dataset.removeAttachment);
     return;
