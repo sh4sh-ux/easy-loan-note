@@ -160,7 +160,7 @@ function handleDocumentClick(event) {
         alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
         return;
       }
-      new daum.Postcode({
+      var o=document.createElement('div');o.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;';document.body.appendChild(o);new daum.Postcode({
         oncomplete: function(data) {
           var field = document.querySelector('[name="' + button.dataset.postcode + '"]');
           if (field) {
@@ -168,8 +168,9 @@ function handleDocumentClick(event) {
             field.dispatchEvent(new Event("input", { bubbles: true }));
             field.focus();
           }
+          if(o.parentNode)document.body.removeChild(o);
         },
-      }).open();
+        onclose:function(){if(o.parentNode)document.body.removeChild(o)},width:'100%',height:'100%'}).embed(o);
     })();(function() {
       if (typeof daum === "undefined" || !daum.Postcode) {
         alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
@@ -183,8 +184,9 @@ function handleDocumentClick(event) {
             field.dispatchEvent(new Event("input", { bubbles: true }));
             field.focus();
           }
+          if(o.parentNode)document.body.removeChild(o);
         },
-      }).open();
+        onclose:function(){if(o.parentNode)document.body.removeChild(o)},width:'100%',height:'100%'}).embed(o);
     })();(function() {
       if (typeof daum === "undefined" || !daum.Postcode) {
         alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
@@ -198,8 +200,9 @@ function handleDocumentClick(event) {
             field.dispatchEvent(new Event("input", { bubbles: true }));
             field.focus();
           }
+          if(o.parentNode)document.body.removeChild(o);
         },
-      }).open();
+        onclose:function(){if(o.parentNode)document.body.removeChild(o)},width:'100%',height:'100%'}).embed(o);
     })();(function() {
       if (typeof daum === "undefined" || !daum.Postcode) {
         alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
@@ -213,8 +216,9 @@ function handleDocumentClick(event) {
             field.dispatchEvent(new Event("input", { bubbles: true }));
             field.focus();
           }
+          if(o.parentNode)document.body.removeChild(o);
         },
-      }).open();
+        onclose:function(){if(o.parentNode)document.body.removeChild(o)},width:'100%',height:'100%'}).embed(o);
     })();(function() {
       if (typeof daum === "undefined" || !daum.Postcode) {
         alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
@@ -228,8 +232,9 @@ function handleDocumentClick(event) {
             field.dispatchEvent(new Event("input", { bubbles: true }));
             field.focus();
           }
+          if(o.parentNode)document.body.removeChild(o);
         },
-      }).open();
+        onclose:function(){if(o.parentNode)document.body.removeChild(o)},width:'100%',height:'100%'}).embed(o);
     })();(function() {
       if (typeof daum === "undefined" || !daum.Postcode) {
         alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
@@ -243,8 +248,9 @@ function handleDocumentClick(event) {
             field.dispatchEvent(new Event("input", { bubbles: true }));
             field.focus();
           }
+          if(o.parentNode)document.body.removeChild(o);
         },
-      }).open();
+        onclose:function(){if(o.parentNode)document.body.removeChild(o)},width:'100%',height:'100%'}).embed(o);
     })();openPostcodeSearch(button.dataset.postcode);
     return;
   }
