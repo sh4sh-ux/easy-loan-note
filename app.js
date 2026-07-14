@@ -131,6 +131,50 @@ function bindEvents() {
   });
 }
 
+function openPostcodeSearch(fieldName) {
+  if (typeof daum === "undefined" || !daum.Postcode) {
+    alert("주소 검색 서비스를 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.");
+    return;
+  }
+  const overlay = document.createElement("div");
+  overlay.className = "postcode-overlay";
+  const box = document.createElement("div");
+  box.className = "postcode-box";
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "postcode-close";
+  closeBtn.textContent = "\u2715 닫기";
+  const embedTarget = document.createElement("div");
+  embedTarget.className = "postcode-embed";
+  box.append(closeBtn, embedTarget);
+  overlay.append(box);
+  document.body.append(overlay);
+
+  const remove = () => {
+    if (overlay.parentNode) overlay.remove();
+  };
+  closeBtn.addEventListener("click", remove);
+
+  new daum.Postcode({
+    oncomplete(data) {
+      const base = document.querySelector('[name="' + fieldName + '"]');
+      if (base) {
+        base.value = data.roadAddress || data.address || "";
+        base.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      remove();
+      // 도로명주소를 채운 뒤 상세주소 입력란으로 커서 이동
+      const detail = document.querySelector('[name="' + fieldName + 'Detail"]');
+      if (detail) detail.focus();
+    },
+    onclose() {
+      remove();
+    },
+    width: "100%",
+    height: "100%",
+  }).embed(embedTarget);
+}
+
 function handleDocumentClick(event) {
   const button = event.target.closest("button");
   if (!button) return;
@@ -155,103 +199,7 @@ function handleDocumentClick(event) {
   }
 
   if (button.dataset.postcode) {
-    (function() {
-      if (typeof daum === "undefined" || !daum.Postcode) {
-        alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-        return;
-      }
-      var o=document.createElement('div');o.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;';document.body.appendChild(o);new daum.Postcode({
-        oncomplete: function(data) {
-          var field = document.querySelector('[name="' + button.dataset.postcode + '"]');
-          if (field) {
-            field.value = data.address;
-            field.dispatchEvent(new Event("input", { bubbles: true }));
-            field.focus();
-          }
-          if(o.parentNode)document.body.removeChild(o);
-        },
-        onclose:function(){if(o.parentNode)document.body.removeChild(o)},width:'100%',height:'100%'}).embed(o);
-    })();(function() {
-      if (typeof daum === "undefined" || !daum.Postcode) {
-        alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-        return;
-      }
-      new daum.Postcode({
-        oncomplete: function(data) {
-          var field = document.querySelector('[name="' + button.dataset.postcode + '"]');
-          if (field) {
-            field.value = data.address;
-            field.dispatchEvent(new Event("input", { bubbles: true }));
-            field.focus();
-          }
-          if(o.parentNode)document.body.removeChild(o);
-        },
-        onclose:function(){if(o.parentNode)document.body.removeChild(o)},width:'100%',height:'100%'}).embed(o);
-    })();(function() {
-      if (typeof daum === "undefined" || !daum.Postcode) {
-        alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-        return;
-      }
-      new daum.Postcode({
-        oncomplete: function(data) {
-          var field = document.querySelector('[name="' + button.dataset.postcode + '"]');
-          if (field) {
-            field.value = data.address;
-            field.dispatchEvent(new Event("input", { bubbles: true }));
-            field.focus();
-          }
-          if(o.parentNode)document.body.removeChild(o);
-        },
-        onclose:function(){if(o.parentNode)document.body.removeChild(o)},width:'100%',height:'100%'}).embed(o);
-    })();(function() {
-      if (typeof daum === "undefined" || !daum.Postcode) {
-        alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-        return;
-      }
-      new daum.Postcode({
-        oncomplete: function(data) {
-          var field = document.querySelector('[name="' + button.dataset.postcode + '"]');
-          if (field) {
-            field.value = data.address;
-            field.dispatchEvent(new Event("input", { bubbles: true }));
-            field.focus();
-          }
-          if(o.parentNode)document.body.removeChild(o);
-        },
-        onclose:function(){if(o.parentNode)document.body.removeChild(o)},width:'100%',height:'100%'}).embed(o);
-    })();(function() {
-      if (typeof daum === "undefined" || !daum.Postcode) {
-        alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-        return;
-      }
-      new daum.Postcode({
-        oncomplete: function(data) {
-          var field = document.querySelector('[name="' + button.dataset.postcode + '"]');
-          if (field) {
-            field.value = data.address;
-            field.dispatchEvent(new Event("input", { bubbles: true }));
-            field.focus();
-          }
-          if(o.parentNode)document.body.removeChild(o);
-        },
-        onclose:function(){if(o.parentNode)document.body.removeChild(o)},width:'100%',height:'100%'}).embed(o);
-    })();(function() {
-      if (typeof daum === "undefined" || !daum.Postcode) {
-        alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-        return;
-      }
-      new daum.Postcode({
-        oncomplete: function(data) {
-          var field = document.querySelector('[name="' + button.dataset.postcode + '"]');
-          if (field) {
-            field.value = data.address;
-            field.dispatchEvent(new Event("input", { bubbles: true }));
-            field.focus();
-          }
-          if(o.parentNode)document.body.removeChild(o);
-        },
-        onclose:function(){if(o.parentNode)document.body.removeChild(o)},width:'100%',height:'100%'}).embed(o);
-    })();openPostcodeSearch(button.dataset.postcode);
+    openPostcodeSearch(button.dataset.postcode);
     return;
   }
 
@@ -1208,6 +1156,13 @@ async function shareOrDownloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+function fullAddress(base, detail) {
+  return [base, detail]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
 function buildContractHtml() {
   const data = state.data;
   const amount = data.principalNumber || 0;
@@ -1238,7 +1193,7 @@ function buildContractHtml() {
         ${partyRow("이름", data.creditorName, data.debtorName, data.guarantorName)}
         ${partyRow("주민등록번호", data.creditorRRN || "미기재", data.debtorRRN || "미기재", data.guarantorRRN || "미기재")}
         ${partyRow("휴대전화번호", data.creditorPhone, data.debtorPhone, data.guarantorPhone)}
-        ${partyRow("주소", data.creditorAddress, data.debtorAddress, data.guarantorAddress)}
+        ${partyRow("주소", fullAddress(data.creditorAddress, data.creditorAddressDetail), fullAddress(data.debtorAddress, data.debtorAddressDetail), fullAddress(data.guarantorAddress, data.guarantorAddressDetail))}
         ${partyRow("이메일", data.creditorEmail || "미기재", data.debtorEmail || "미기재", hasGuarantor ? "미기재" : "")}
       </tbody>
     </table>

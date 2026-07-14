@@ -12,7 +12,7 @@
     <title>쉬운 차용증</title>
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-    <link rel="stylesheet" href="./style.css?v=13" />
+    <link rel="stylesheet" href="./style.css?v=14" />
   </head>
   <body>
     <a class="skip-link" href="#main">본문으로 이동</a>
@@ -89,7 +89,11 @@
                   <label>
                     주소
                     <button class="secondary-button small" type="button" data-postcode="creditorAddress">주소 검색</button>
-                    <textarea name="creditorAddress" rows="3" required></textarea>
+                    <textarea name="creditorAddress" rows="2" required placeholder="기본주소 (주소 검색 또는 직접 입력)"></textarea>
+                  </label>
+                  <label>
+                    상세주소
+                    <input name="creditorAddressDetail" autocomplete="off" placeholder="동·호수 등 (선택)" />
                   </label>
                   <label>
                     이메일·선택
@@ -115,7 +119,11 @@
                   <label>
                     주소
                     <button class="secondary-button small" type="button" data-postcode="debtorAddress">주소 검색</button>
-                    <textarea name="debtorAddress" rows="3" required></textarea>
+                    <textarea name="debtorAddress" rows="2" required placeholder="기본주소 (주소 검색 또는 직접 입력)"></textarea>
+                  </label>
+                  <label>
+                    상세주소
+                    <input name="debtorAddressDetail" autocomplete="off" placeholder="동·호수 등 (선택)" />
                   </label>
                   <label>
                     이메일·선택
@@ -154,7 +162,11 @@
                   <label>
                     주소
                     <button class="secondary-button small" type="button" data-postcode="guarantorAddress">주소 검색</button>
-                    <textarea name="guarantorAddress" rows="3"></textarea>
+                    <textarea name="guarantorAddress" rows="2" placeholder="기본주소 (주소 검색 또는 직접 입력)"></textarea>
+                  </label>
+                  <label>
+                    상세주소
+                    <input name="guarantorAddressDetail" autocomplete="off" placeholder="동·호수 등 (선택)" />
                   </label>
                   <p class="field-help">
                     연대보증은 「민법」 제428조의2에 따라 보증인이 직접 서명한 서면이어야 효력이 있습니다.
@@ -454,6 +466,6 @@
     </div>
 
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
-    <script src="./app.js?v=13" defer></script>
+    <script src="./app.js?v=14" defer></script>
   </body>
 </html>
