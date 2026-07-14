@@ -155,7 +155,97 @@ function handleDocumentClick(event) {
   }
 
   if (button.dataset.postcode) {
-    openPostcodeSearch(button.dataset.postcode);
+    (function() {
+      if (typeof daum === "undefined" || !daum.Postcode) {
+        alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      new daum.Postcode({
+        oncomplete: function(data) {
+          var field = document.querySelector('[name="' + button.dataset.postcode + '"]');
+          if (field) {
+            field.value = data.address;
+            field.dispatchEvent(new Event("input", { bubbles: true }));
+            field.focus();
+          }
+        },
+      }).open();
+    })();(function() {
+      if (typeof daum === "undefined" || !daum.Postcode) {
+        alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      new daum.Postcode({
+        oncomplete: function(data) {
+          var field = document.querySelector('[name="' + button.dataset.postcode + '"]');
+          if (field) {
+            field.value = data.address;
+            field.dispatchEvent(new Event("input", { bubbles: true }));
+            field.focus();
+          }
+        },
+      }).open();
+    })();(function() {
+      if (typeof daum === "undefined" || !daum.Postcode) {
+        alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      new daum.Postcode({
+        oncomplete: function(data) {
+          var field = document.querySelector('[name="' + button.dataset.postcode + '"]');
+          if (field) {
+            field.value = data.address;
+            field.dispatchEvent(new Event("input", { bubbles: true }));
+            field.focus();
+          }
+        },
+      }).open();
+    })();(function() {
+      if (typeof daum === "undefined" || !daum.Postcode) {
+        alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      new daum.Postcode({
+        oncomplete: function(data) {
+          var field = document.querySelector('[name="' + button.dataset.postcode + '"]');
+          if (field) {
+            field.value = data.address;
+            field.dispatchEvent(new Event("input", { bubbles: true }));
+            field.focus();
+          }
+        },
+      }).open();
+    })();(function() {
+      if (typeof daum === "undefined" || !daum.Postcode) {
+        alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      new daum.Postcode({
+        oncomplete: function(data) {
+          var field = document.querySelector('[name="' + button.dataset.postcode + '"]');
+          if (field) {
+            field.value = data.address;
+            field.dispatchEvent(new Event("input", { bubbles: true }));
+            field.focus();
+          }
+        },
+      }).open();
+    })();(function() {
+      if (typeof daum === "undefined" || !daum.Postcode) {
+        alert("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      new daum.Postcode({
+        oncomplete: function(data) {
+          var field = document.querySelector('[name="' + button.dataset.postcode + '"]');
+          if (field) {
+            field.value = data.address;
+            field.dispatchEvent(new Event("input", { bubbles: true }));
+            field.focus();
+          }
+        },
+      }).open();
+    })();openPostcodeSearch(button.dataset.postcode);
     return;
   }
 
