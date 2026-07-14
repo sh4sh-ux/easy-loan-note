@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="ko">
   <head>
@@ -87,6 +88,7 @@
                   </label>
                   <label>
                     주소
+                    <button class="secondary-button small" type="button" data-postcode="creditorAddress">주소 검색</button>
                     <textarea name="creditorAddress" rows="3" required></textarea>
                   </label>
                   <label>
@@ -112,6 +114,7 @@
                   </label>
                   <label>
                     주소
+                    <button class="secondary-button small" type="button" data-postcode="debtorAddress">주소 검색</button>
                     <textarea name="debtorAddress" rows="3" required></textarea>
                   </label>
                   <label>
@@ -150,6 +153,7 @@
                   </label>
                   <label>
                     주소
+                    <button class="secondary-button small" type="button" data-postcode="guarantorAddress">주소 검색</button>
                     <textarea name="guarantorAddress" rows="3"></textarea>
                   </label>
                   <p class="field-help">
@@ -449,6 +453,7 @@
       </div>
     </div>
 
+    <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="./app.js?v=13" defer></script>
   </body>
 </html>
