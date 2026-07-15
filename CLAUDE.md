@@ -37,7 +37,7 @@ git push origin main
 2. `service-worker.js` 의 `CACHE_VERSION` (예: `easy-loan-note-v15-...`)
 3. `service-worker.js` APP_SHELL 안의 `./style.css?v=N`, `./app.js?v=N`
 
-현재 버전: **v14**. (다음에 고치면 v15로)
+현재 버전: **v15**. (다음에 고치면 v16으로)
 
 ## ⚠️ 서비스워커 캐시 — 새로고침 두 번
 cache-first 방식이라, 배포 후 기존 사용자는 **첫 새로고침엔 이전 버전, 한 번 더 새로고침해야 새 버전**이 뜬다.
