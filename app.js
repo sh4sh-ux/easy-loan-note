@@ -1203,30 +1203,26 @@ function buildContractHtml() {
 
   clauses.push(["당사자", partyTable]);
 
-  clauses.push([
-    "대여금",
-    `<p>채권자는 채무자에게 대여 원금 <strong>${escapeHtml(numberToKoreanMoney(amount))}(${escapeHtml(formatWon(amount))}원)</strong>을 <strong>${escapeHtml(formatDateKorean(data.loanDate))}</strong>에 <strong>${escapeHtml(data.paymentMethod || "계좌이체")}</strong> 방법으로 채무자 명의의 상환계좌 또는 채무자가 지정한 계좌로 지급합니다.</p>
-     <p>이 계약은 대여금이 채무자에게 실제로 입금(지급)된 때부터 효력이 발생합니다. 실제 입금된 금액이 위 금액과 다른 경우에는 별도의 서면 합의가 없으면 실제 입금된 금액을 대여원금으로 하며, 그 금액을 기준으로 이 계약의 원금·이자·상환액을 정합니다.</p>
-     <p>계좌이체 확인증, 이체 내역 등 대여금 지급을 확인할 수 있는 자료는 이 계약의 대여 사실을 증명하는 자료로 사용하며, 양쪽이 보관합니다.</p>`,
-  ]);
+  clauses.push(["대여금", renderLoanClause(data, amount)]);
 
   clauses.push(["이자", renderInterestClause(data)]);
   clauses.push(["상환 방법", renderRepaymentClause(data)]);
 
   clauses.push([
     "지연손해금",
-    `<p>채무자가 약정한 상환기한 또는 기한의 이익 상실로 정해진 상환기한까지 갚지 않으면, 그 다음 날부터 실제로 갚는 날까지 미상환 원금에 대하여 <strong>${escapeHtml(renderLateRate(data))}</strong>와 관계 법령상 최고이율 중 낮은 이율로 지연손해금을 일할 계산하여 지급합니다.</p>
-     <p>지연손해금은 미상환 원금을 기준으로 하며, 이미 발생한 지연손해금에는 다시 이자를 붙이지 않습니다. 채무자가 갚은 돈은 비용, 지연손해금, 원금의 순서로 충당합니다.</p>`,
+    `<p>채무자가 상환기일까지 원금을 전부 상환하지 않은 경우, 상환기일 다음 날부터 실제 상환일까지 미상환 원금에 대하여 <strong>${escapeHtml(renderLateRate(data))}</strong>와 관계 법령상 최고이율 중 낮은 이율의 지연손해금을 일할 계산하여 지급합니다.</p>
+     <p>지연손해금은 미상환 원금을 기준으로 하며, 이미 발생한 지연손해금에는 다시 이자를 붙이지 않습니다.</p>`,
   ]);
 
   clauses.push(["기한의 이익 상실", renderAccelerationClause(data)]);
 
   clauses.push([
     "조기상환과 완납 확인",
-    `<p>채무자는 상환기한 전이라도 원금의 전부 또는 일부를 미리 갚을 수 있으며, 중도상환수수료는 없습니다. 원금 일부를 미리 갚으면 미상환 원금은 실제 갚은 금액만큼 줄어듭니다.${
+    `<p>채무자는 상환기일 전이라도 원금의 전부 또는 일부를 미리 상환할 수 있으며, 중도상환수수료는 없습니다. 일부 상환한 경우 미상환 원금은 실제 상환한 금액만큼 줄어듭니다.${
       hasInterest ? " 이후의 이자는 미상환 원금을 기준으로 계산합니다." : ""
     }</p>
-     <p>채무자가 전부 갚으면 채권자는 완납확인서 또는 영수증을 발급하고, 양쪽은 계좌이체 확인증과 상환 확인 기록을 보관합니다.</p>`,
+     <p>상환기일이 지난 후 일부 금액을 지급한 경우에는 관계 법령에 따라 인정되는 변제비용, 지연손해금, 원금의 순서로 충당하며, 지연손해금은 남은 미상환 원금을 기준으로 계산합니다.</p>
+     <p>채무자가 원금, 발생한 지연손해금 및 관계 법령상 부담하는 변제비용을 모두 지급하면 채권자는 완납확인서 또는 영수증을 발급해야 하며, 양쪽은 계좌이체 확인증과 상환 확인 기록을 보관합니다.</p>`,
   ]);
 
   if (hasGuarantor) {
@@ -1235,26 +1231,26 @@ function buildContractHtml() {
 
   clauses.push([
     "연락처 또는 주소 변경",
-    `<p>계약 당사자는 휴대전화번호, 주소 또는 이메일이 바뀌면 상대방에게 지체 없이 알려야 합니다. 상대방이 통지를 실제로 확인할 수 있도록 발송기록이나 수신기록을 보관합니다.</p>`,
+    `<p>계약 당사자는 휴대전화번호, 주소 또는 이메일이 변경된 경우 변경일로부터 7일 이내에 상대방에게 문자, 이메일, 카카오톡 또는 서면으로 알려야 합니다. 통지한 당사자는 발송기록 또는 수신기록을 보관합니다.</p>`,
   ]);
 
   clauses.push([
     "계약 변경",
-    `<p>이 계약 내용을 변경하려면 채권자와 채무자가 변경된 내용을 확인하고 다시 서명해야 합니다. 전화나 말로만 합의한 내용은 상대방이 인정하지 않으면 계약 변경으로 보지 않습니다.</p>`,
+    `<p>이 계약의 내용을 변경하거나 추가하려면 변경 내용을 기재한 서면 또는 전자문서에 채권자와 채무자가 각각 서명해야 합니다. 이 절차를 거치지 않은 전화, 대화 또는 구두 합의는 계약 변경으로서 효력이 없습니다.</p>`,
   ]);
 
   clauses.push([
     "전자문서와 전자서명",
     `<p>계약 당사자는 이 계약서를 모바일 또는 전자문서로 작성하고 전자서명하는 것에 동의합니다. 각 당사자는 전자서명 전에 계약서 전체 내용을 확인하였으며, 서명 후 동일한 내용의 최종 계약서를 각각 보관합니다.</p>
-     <p>이 계약서는 공정증서가 아니며, 이 문서만으로 곧바로 강제집행을 할 수 있다는 뜻으로 해석하지 않습니다. 금액이 크거나 담보·보증·분쟁 가능성이 있는 거래는 전문가 검토 또는 공증을 권장합니다.</p>`,
+     <p>이 계약서는 공정증서가 아니며, 이 문서만으로 곧바로 강제집행을 할 수 있다는 뜻으로 해석하지 않습니다.</p>`,
   ]);
 
   clauses.push([
     "관할법원과 분쟁 해결",
-    `<p>분쟁이 생기면 먼저 대화와 서면 협의를 통해 해결하도록 노력합니다.</p>
-     <p>협의로 해결되지 않으면 ${
-       data.court ? escapeHtml(data.court) : "이 계약 체결 당시 채권자의 주소지를 관할하는 법원"
-     }을 제1심 관할법원으로 하기로 합의합니다. 다만 관계 법령상 전속관할이 있는 경우에는 그에 따릅니다.</p>`,
+    `<p>당사자는 분쟁이 발생한 경우 먼저 대화와 서면 협의를 통해 해결하도록 노력합니다.</p>
+     <p>협의로 해결되지 않는 경우에는 ${
+       data.court ? `${escapeHtml(data.court)}을(를)` : "민사소송법에 따른 관할법원을"
+     } 제1심 관할법원으로 합니다.</p>`,
   ]);
 
   if (data.specialTerms) {
@@ -1280,6 +1276,7 @@ function buildContractHtml() {
       <p>대여금은 <strong>${escapeHtml(numberToKoreanMoney(amount))}</strong>으로 표시하며, ${escapeHtml(repaymentText)}</p>
       <p>${escapeHtml(interestText)} 상환금은 ${escapeHtml(data.repaymentBank || "-")} ${escapeHtml(data.repaymentAccount || "-")} 계좌로 보냅니다.</p>
       ${guarantorSummary}
+      <p class="summary-note">※ 쉬운 말 요약은 계약 내용을 쉽게 이해할 수 있도록 정리한 참고사항입니다. 요약 내용과 계약 본문이 다를 경우에는 계약 본문을 따릅니다.</p>
     </section>
 
     ${clausesHtml}
@@ -1339,31 +1336,26 @@ function renderAttachmentSection() {
       `,
     )
     .join("");
-  return `<section class="clause"><h2>별첨</h2><p>다음 자료를 이 계약서의 참고자료로 첨부합니다.</p><p>별첨 자료는 참고 목적으로 첨부한 것으로, 별도의 담보 조항이나 서면 합의가 없으면 담보 제공, 소유권 이전 또는 물품 매매의 합의를 의미하지 않습니다.</p></section>${figures}`;
+  return `<section class="clause"><h2>별첨</h2><p>다음 자료를 계약 체결 또는 대여금 지급 사실을 확인하기 위한 별첨자료로 첨부합니다. 각 별첨자료의 제목과 첨부 목적은 아래에 표시합니다.</p><p>별도의 명시가 없는 한 별첨자료의 첨부만으로 담보 제공, 소유권 이전 또는 보증 약정이 성립하는 것은 아닙니다.</p></section>${figures}`;
 }
 
 function renderAccelerationClause(data) {
   const isInstallment = data.repaymentType === "installment";
   const hasInterest = data.interestType === "interest";
-  const hasPeriodicObligation = isInstallment || hasInterest;
-  const owedText = hasInterest ? "남은 원금과 미지급 이자" : "남은 원금";
   const reasons = [];
-  // 정기적으로 갚아야 할 분할금·이자가 있는 계약에서만 '미납·연속 지체' 사유가 의미가 있음
-  if (isInstallment) reasons.push("분할상환금을 2회 연속 지체한 때");
-  if (hasInterest) reasons.push("이자를 2회 연속 지체한 때");
-  if (hasPeriodicObligation) {
-    reasons.push("채권자가 지체 사실을 통지한 후 14일이 지나도록 지체한 금액을 갚지 않은 때");
-  }
-  reasons.push("채무자가 다른 채권자로부터 가압류·압류·강제집행을 당하거나 파산·회생 절차가 개시된 때");
+  // 정기적으로 갚아야 할 분할금·이자가 있는 계약에서만 '연속 지체' 사유가 의미가 있음
+  if (isInstallment) reasons.push("채무자가 분할상환금을 2회 연속 지체한 경우");
+  if (hasInterest) reasons.push("채무자가 이자를 2회 연속 지체한 경우");
+  // 소액 가압류 한 건으로 전액 청구되지 않도록 '주요 재산'으로 한정
   reasons.push(
-    "채무자가 연락처 또는 주소 변경 사실을 알리지 않아, 채권자가 기존 연락처·주소로 7일 이상 간격을 두고 2회 이상 연락하였음에도 연락이 되지 않는 때",
+    "채무자의 주요 재산에 대하여 가압류·압류 또는 강제집행 절차가 개시되거나, 채무자에 대하여 파산·회생 또는 개인회생 절차가 개시된 경우",
   );
 
   const items = reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("");
   return `
-    <p>채무자에게 다음 사유가 생기면 채무자는 기한의 이익을 잃고, 채권자는 ${escapeHtml(owedText)}을 한꺼번에 갚으라고 요구할 수 있습니다.</p>
+    <p>채무자에게 다음 사유가 발생한 경우, 채권자는 채무자에게 서면 또는 전자문서로 통지하고 미상환 원금 전액의 조기상환을 청구할 수 있습니다.</p>
     <ol>${items}</ol>
-    <p>채권자가 이 권리를 행사하려면 기한의 이익 상실 사유와 갚아야 할 원금, 상환기한을 전자문서 또는 서면으로 채무자에게 통지하며, 채무자가 그 상환기한까지 갚지 않으면 그 다음 날부터 지연손해금이 발생합니다.</p>
+    <p>채권자는 조기상환을 청구할 때 조기상환 사유, 미상환 원금 및 조기상환기한을 구체적으로 알려야 하며, 조기상환기한은 통지일로부터 7일 이후의 날로 정합니다. 채무자가 조기상환기한까지 미상환 원금을 지급하지 않은 경우, 그 다음 날부터 제5조의 지연손해금이 발생합니다.</p>
   `;
 }
 
@@ -1375,9 +1367,27 @@ function renderGuarantorClause(data) {
   `;
 }
 
+function renderLoanClause(data, amount) {
+  const money = `<strong>${escapeHtml(numberToKoreanMoney(amount))}(${escapeHtml(formatWon(amount))}원)</strong>`;
+  const date = `<strong>${escapeHtml(formatDateKorean(data.loanDate))}</strong>`;
+  const method = `<strong>${escapeHtml(data.paymentMethod || "계좌이체")}</strong>`;
+
+  const payLine =
+    data.paymentStatus === "pending"
+      ? `<p>채권자는 채무자에게 대여 원금 ${money}을 ${date} ${method} 방식으로 채무자 명의의 수령계좌 또는 채무자가 서면이나 전자문서로 지정한 계좌에 지급하기로 합니다.</p>`
+      : `<p>채권자는 채무자에게 대여 원금 ${money}을 ${date} ${method} 방식으로 채무자 명의의 수령계좌 또는 채무자가 서면이나 전자문서로 지정한 계좌에 지급하였으며, 채무자는 이를 수령하였음을 확인합니다.</p>`;
+
+  return `
+    ${payLine}
+    <p>채무자가 제3자 명의의 계좌를 지정한 경우, 해당 계좌에 대여금이 입금된 때 채무자가 대여금을 지급받은 것으로 봅니다.</p>
+    <p>이 계약은 양 당사자의 서명이 완료된 때 성립하며, 채무자의 원금 상환 의무는 대여금이 실제로 입금된 때부터 실제 입금된 금액의 범위에서 발생합니다. 실제 입금액이 위 계약금액과 다른 경우에는 별도의 서면 합의가 없는 한 실제 입금액을 대여 원금으로 하되, 대여 원금은 위 계약금액을 초과하지 않습니다.</p>
+    <p>계좌이체 확인증, 이체 내역 등 대여금 지급을 확인할 수 있는 자료는 대여 사실을 증명하는 자료로 사용하며, 양쪽이 보관합니다.</p>
+  `;
+}
+
 function renderInterestClause(data) {
   if (data.interestType !== "interest") {
-    return `<p>채무자는 원금만 갚고 이자는 지급하지 않습니다.</p>`;
+    return `<p>이 대여금에는 약정이자를 부과하지 않습니다. 다만, 채무자가 상환기한을 넘긴 경우에는 제5조의 지연손해금이 발생합니다.</p>`;
   }
 
   return `
@@ -1392,6 +1402,9 @@ function renderRepaymentClause(data) {
     ` / 계좌번호 : <strong>${escapeHtml(data.repaymentAccount || "-")}</strong>` +
     ` / 예금주 : <strong>${escapeHtml(data.repaymentHolder || "-")}</strong> 입니다.`;
 
+  const accountChangeNote =
+    "<p>상환계좌를 변경하려면 채권자가 본인 명의로 서명한 서면 또는 전자문서로 채무자에게 알려야 하며, 이 절차에 따르지 않은 상환계좌 변경 통지는 효력이 없습니다.</p>";
+
   const hasInterest = data.interestType === "interest";
   const holidayNote =
     "<p>상환기한이 토요일·일요일 또는 공휴일인 경우에는 그 다음 영업일까지 갚습니다.</p>";
@@ -1405,18 +1418,21 @@ function renderRepaymentClause(data) {
       <p>채무자는 아래 일정에 따라 ${principalText} <strong>${escapeHtml(String(data.installmentCountNumber))}회</strong>에 걸쳐 나누어 갚습니다. 원 단위 차이는 마지막 회차에서 정리합니다.</p>
       ${renderScheduleTable(data.repaymentSchedule)}
       <p>${accountText}</p>
+      ${accountChangeNote}
       ${holidayNote}
       ${noInterestNote}
     `;
   }
 
   const lumpText = hasInterest
-    ? `<p>채무자는 <strong>${escapeHtml(formatDateKorean(data.finalDueDate))}</strong>까지 원금 전액과 그때까지 발생한 이자를 한 번에 갚습니다.</p>`
-    : `<p>채무자는 <strong>${escapeHtml(formatDateKorean(data.finalDueDate))}</strong>까지 원금 전액을 한 번에 갚습니다.</p>`;
+    ? `<p>채무자는 <strong>${escapeHtml(formatDateKorean(data.finalDueDate))}</strong>까지 원금 전액과 그때까지 발생한 이자를 아래 상환계좌로 일시 상환합니다.</p>`
+    : `<p>채무자는 <strong>${escapeHtml(formatDateKorean(data.finalDueDate))}</strong>까지 원금 전액을 아래 상환계좌로 일시 상환합니다.</p>`;
 
   return `
     ${lumpText}
     <p>${accountText}</p>
+    ${accountChangeNote}
+    <p>상환은 위 상환계좌에 상환금이 실제로 입금된 때 완료된 것으로 봅니다.</p>
     ${holidayNote}
     ${noInterestNote}
   `;
@@ -1969,6 +1985,7 @@ const DOC_CSS = `
   .contract-doc .attachment-print img { display: block; max-width: 100%; border: 1px solid #D4D4D8; border-radius: 8px; }
   .contract-doc .attachment-print figcaption { margin-top: 3px; font-size: 11px; color: #666; }
   .contract-doc .audit-device { margin-top: 4px; font-size: 10.5px; color: #888; overflow-wrap: anywhere; }
+  .contract-doc .summary-note { margin-top: 6px; font-size: 11.5px; color: #666; }
 `;
 
 function downloadFinalHtml() {

@@ -12,7 +12,7 @@
     <title>쉬운 차용증</title>
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-    <link rel="stylesheet" href="./style.css?v=14" />
+    <link rel="stylesheet" href="./style.css?v=15" />
   </head>
   <body>
     <a class="skip-link" href="#main">본문으로 이동</a>
@@ -196,7 +196,7 @@
                   <strong class="amount-korean" id="amountKorean">금 영원정</strong>
                 </label>
                 <label>
-                  돈을 지급하는 날짜
+                  돈을 지급하는(예정) 날짜
                   <input name="loanDate" type="date" required />
                 </label>
                 <label>
@@ -209,6 +209,18 @@
                   </select>
                 </label>
               </div>
+
+              <fieldset class="segmented-field">
+                <legend>대여금 지급 상태</legend>
+                <label>
+                  <input type="radio" name="paymentStatus" value="paid" checked />
+                  이미 지급함
+                </label>
+                <label>
+                  <input type="radio" name="paymentStatus" value="pending" />
+                  지급 예정
+                </label>
+              </fieldset>
 
               <fieldset class="segmented-field">
                 <legend>이자</legend>
@@ -466,6 +478,6 @@
     </div>
 
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
-    <script src="./app.js?v=14" defer></script>
+    <script src="./app.js?v=15" defer></script>
   </body>
 </html>
