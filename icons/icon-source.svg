@@ -1,0 +1,69 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#4A9EF2"/>
+      <stop offset="1" stop-color="#0071E3"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E9F1FC"/>
+    </linearGradient>
+    <linearGradient id="barrel" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#082C5E"/>
+      <stop offset="0.5" stop-color="#17539E"/>
+      <stop offset="1" stop-color="#082C5E"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0.5">
+      <stop offset="0" stop-color="#FCE28E"/>
+      <stop offset="0.5" stop-color="#EEBE4A"/>
+      <stop offset="1" stop-color="#CE9328"/>
+    </linearGradient>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#00347A" flood-opacity="0.26"/>
+    </filter>
+    <filter id="penShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="-3" dy="6" stdDeviation="7" flood-color="#00296A" flood-opacity="0.34"/>
+    </filter>
+  </defs>
+
+  <!-- full-bleed background (maskable-safe) -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <!-- back paper (peeking, depth) -->
+  <rect x="182" y="122" width="172" height="244" rx="20"
+        fill="#FFFFFF" opacity="0.40" transform="rotate(-7 268 244)"/>
+
+  <!-- front paper -->
+  <g filter="url(#soft)">
+    <rect x="150" y="148" width="196" height="248" rx="22" fill="url(#paper)"/>
+  </g>
+
+  <!-- signature lines -->
+  <g fill="#C4D8F2">
+    <rect x="178" y="196" width="118" height="14" rx="7"/>
+    <rect x="178" y="232" width="140" height="14" rx="7"/>
+    <rect x="178" y="268" width="92"  height="14" rx="7"/>
+  </g>
+  <!-- signing line (accent) -->
+  <rect x="178" y="336" width="140" height="14" rx="7" fill="#0071E3" opacity="0.85"/>
+
+  <!-- fountain pen, nib touching the signing line at (300,343) -->
+  <g filter="url(#penShadow)" transform="translate(300 343) rotate(40)">
+    <!-- barrel -->
+    <rect x="-17" y="-244" width="34" height="122" rx="17" fill="url(#barrel)"/>
+    <!-- clip -->
+    <rect x="8" y="-236" width="9" height="58" rx="4.5" fill="url(#gold)"/>
+    <!-- cap band (gold, bold) -->
+    <rect x="-17" y="-136" width="34" height="16" rx="3" fill="url(#gold)"/>
+    <!-- grip section -->
+    <path d="M-16 -122 L16 -122 L14 -86 L-14 -86 Z" fill="#082C5E"/>
+    <!-- gold collar ring at nib base -->
+    <rect x="-16" y="-88" width="32" height="15" rx="4" fill="url(#gold)"/>
+    <!-- gold nib (shorter, wider) -->
+    <path d="M0 0 C 11 -20 23 -36 25 -54 L 15 -73 Q 0 -78 -15 -73 L -25 -54 C -23 -36 -11 -20 0 0 Z"
+          fill="url(#gold)"/>
+    <!-- breather hole + slit -->
+    <circle cx="0" cy="-50" r="6.5" fill="#96701E"/>
+    <rect x="-2.2" y="-50" width="4.4" height="42" rx="2.2" fill="#96701E"/>
+  </g>
+</svg>
