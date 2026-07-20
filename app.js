@@ -1191,8 +1191,16 @@ function buildContractHtml() {
     return `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(creditorValue)}</td><td>${escapeHtml(debtorValue)}</td>${guarantorCell}</tr>`;
   };
 
+  const partyDataCols = hasGuarantor ? 3 : 2;
+  const partyDataColWidth = ((100 - 16) / partyDataCols).toFixed(2);
+  const partyColgroup =
+    `<colgroup><col style="width:16%" />` +
+    `<col style="width:${partyDataColWidth}%" />`.repeat(partyDataCols) +
+    `</colgroup>`;
+
   const partyTable = `
-    <table>
+    <table class="party-table">
+      ${partyColgroup}
       <tbody>
         <tr><th>구분</th><th>채권자</th><th>채무자</th>${hasGuarantor ? "<th>연대보증인</th>" : ""}</tr>
         ${partyRow("이름", data.creditorName, data.debtorName, data.guarantorName)}
@@ -1981,6 +1989,8 @@ const DOC_CSS = `
   .contract-doc table { width: 100%; border-collapse: collapse; margin: 6px 0; }
   .contract-doc th, .contract-doc td { border: 1px solid #D4D4D8; padding: 4px 7px; text-align: left; font-size: 12px; vertical-align: top; }
   .contract-doc th { background: #F3F3F5; }
+  .contract-doc .party-table { table-layout: fixed; }
+  .contract-doc .party-table th, .contract-doc .party-table td { word-break: keep-all; overflow-wrap: anywhere; }
   .contract-doc ol { padding-left: 20px; margin: 4px 0; }
   .contract-doc li { margin-bottom: 2px; }
   .contract-doc .contract-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px;
