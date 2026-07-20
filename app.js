@@ -159,7 +159,12 @@ function openPostcodeSearch(fieldName) {
     oncomplete(data) {
       const base = document.querySelector('[name="' + fieldName + '"]');
       if (base) {
-        base.value = data.roadAddress || data.address || "";
+        let addr = data.roadAddress || data.address || "";
+        // 아파트·건물명이 있으면 괄호로 덧붙임 (예: "... 학동로63길 13 (청담 영풍 마드레빌 아파트)")
+        if (data.buildingName) {
+          addr += " (" + data.buildingName + ")";
+        }
+        base.value = addr;
         base.dispatchEvent(new Event("input", { bubbles: true }));
       }
       remove();
