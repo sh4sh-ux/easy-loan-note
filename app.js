@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v21";
+const APP_VERSION = "v24";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -274,6 +274,9 @@ function handleDocumentClick(event) {
     case "add-attachment":
       elements.attachmentInput.click();
       break;
+    case "home":
+      backToIntro();
+      break;
     case "archive":
       showArchive();
       break;
@@ -367,6 +370,14 @@ function showArchive() {
 function closeArchive() {
   elements.archive.hidden = true;
   elements.intro.hidden = false;
+}
+
+// 작성 화면에서 인트로로 돌아가기 (작성 내용은 저장돼 있어 '작성 중인 내용 보기'로 이어감)
+function backToIntro() {
+  elements.workspace.hidden = true;
+  elements.archive.hidden = true;
+  elements.intro.hidden = false;
+  window.scrollTo({ top: 0 });
 }
 
 function setDefaultDates() {
@@ -1613,7 +1624,7 @@ function buildContractHtml() {
   ]);
 
   if (data.specialTerms) {
-    clauses.push(["추가 약속", `<p>${escapeHtml(data.specialTerms)}</p>`]);
+    clauses.push(["특약사항(추가 약속)", `<p>${escapeHtml(data.specialTerms)}</p>`]);
   }
 
   const clausesHtml = clauses

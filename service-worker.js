@@ -1,12 +1,14 @@
-const CACHE_VERSION = "easy-loan-note-v21-20260720";
+const CACHE_VERSION = "easy-loan-note-v24-20260720";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=21",
-  "./app.js?v=21",
+  "./style.css?v=24",
+  "./app.js?v=24",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
+  "./icons/icon-180.png",
+  "./icons/icon-32.png",
 ];
 
 self.addEventListener("install", (event) => {

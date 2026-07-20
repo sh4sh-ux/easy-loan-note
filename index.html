@@ -11,8 +11,9 @@
     />
     <title>쉬운 차용증</title>
     <link rel="manifest" href="./manifest.json" />
-    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-    <link rel="stylesheet" href="./style.css?v=21" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png" />
+    <link rel="apple-touch-icon" href="./icons/icon-180.png" />
+    <link rel="stylesheet" href="./style.css?v=24" />
   </head>
   <body>
     <a class="skip-link" href="#main">본문으로 이동</a>
@@ -21,7 +22,7 @@
       <header class="app-header no-print">
         <div>
           <p class="eyebrow">개인용 모바일 차용증</p>
-          <h1>쉬운 차용증 <span class="version-chip" id="versionChip" aria-label="앱 버전"></span></h1>
+          <h1><button class="title-home" type="button" data-action="home" aria-label="차용증 · 처음 화면으로">차용증</button> <span class="version-chip" id="versionChip" aria-label="앱 버전"></span></h1>
         </div>
         <button class="icon-button" type="button" id="installButton" hidden aria-label="홈 화면에 설치">
           <span aria-hidden="true">+</span>
@@ -312,7 +313,7 @@
                   <input name="court" placeholder="예: 서울중앙지방법원" />
                 </label>
                 <label class="span-2">
-                  추가 약속·선택
+                  특약사항(추가 약속)·선택
                   <textarea
                     name="specialTerms"
                     rows="4"
@@ -479,6 +480,6 @@
     </div>
 
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
-    <script src="./app.js?v=21" defer></script>
+    <script src="./app.js?v=24" defer></script>
   </body>
 </html>

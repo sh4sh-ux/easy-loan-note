@@ -128,6 +128,23 @@ h1 {
   vertical-align: middle;
 }
 
+/* 제목을 홈(처음 화면) 버튼으로 — 겉모습은 h1 텍스트와 동일 */
+.title-home {
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+}
+
+.title-home:hover {
+  color: var(--blue-txt);
+}
+
 h2 {
   font-size: 17px;
   font-weight: 700;
