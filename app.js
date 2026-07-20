@@ -55,6 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
   registerServiceWorker();
   renderAttachmentList();
   updateAll();
+  initDropbox();
 });
 
 function cacheElements() {
@@ -78,6 +79,7 @@ function cacheElements() {
   elements.guarantorSignTime = document.querySelector("#guarantorSignTime");
   elements.archive = document.querySelector(".archive");
   elements.archiveList = document.querySelector("#archiveList");
+  elements.dbxPanel = document.querySelector("#dbxPanel");
   elements.attachmentInput = document.querySelector("#attachmentInput");
   elements.attachmentList = document.querySelector("#attachmentList");
   elements.importJsonInput = document.querySelector("#importJsonInput");
@@ -270,6 +272,15 @@ function handleDocumentClick(event) {
     case "close-archive":
       closeArchive();
       break;
+    case "dbx-connect":
+      dbxConnect();
+      break;
+    case "dbx-sync":
+      runDbxSync(button);
+      break;
+    case "dbx-disconnect":
+      dbxDisconnect();
+      break;
     case "download-html":
       downloadFinalHtml();
       break;
@@ -339,6 +350,7 @@ function showWorkspace() {
 
 function showArchive() {
   renderArchiveList();
+  renderDbxPanel();
   elements.intro.hidden = true;
   elements.workspace.hidden = true;
   elements.archive.hidden = false;
@@ -787,6 +799,8 @@ function archiveCurrentContract() {
       "보관함 저장 공간이 부족하여 이 계약을 보관하지 못했습니다. JSON 백업으로 저장해 두시고, 보관함에서 오래된 계약을 삭제하면 공간이 생깁니다.",
     );
   }
+  // 연결돼 있으면 Dropbox에도 자동 백업
+  dbxAutoSync();
 }
 
 function renderArchiveList() {
@@ -840,6 +854,330 @@ function deleteArchivedContract(id) {
   if (!confirm("이 계약을 보관함에서 삭제할까요? 삭제하면 되돌릴 수 없습니다.")) return;
   saveArchiveList(loadArchive().filter((entry) => entry.id !== id));
   renderArchiveList();
+  // 삭제는 병합(union) 없이 바로 올려서 Dropbox에서도 지워지게 함
+  dbxAutoPush();
+}
+
+/* ── Dropbox 보관함 백업 (App folder / PKCE) ── */
+
+const DBX_APPKEY_KEY = "easy-loan-note:dbx:appkey";
+const DBX_REFRESH_KEY = "easy-loan-note:dbx:refresh";
+const DBX_TOKEN_KEY = "easy-loan-note:dbx:token";
+const DBX_ACCOUNT_KEY = "easy-loan-note:dbx:account";
+const DBX_VERIFIER_KEY = "easy-loan-note:dbx:verifier";
+const DBX_LASTSYNC_KEY = "easy-loan-note:dbx:lastsync";
+// App folder 스코프이므로 이 경로는 실제로 /Apps/<앱>/ 아래에 매핑됨. ASCII만 사용(한글 헤더 문제 회피).
+const DBX_ARCHIVE_PATH = "/easy-loan-note-archive.json";
+
+function dbxConnected() {
+  return Boolean(localStorage.getItem(DBX_REFRESH_KEY));
+}
+
+function dbxAccountLabel() {
+  try {
+    const account = JSON.parse(localStorage.getItem(DBX_ACCOUNT_KEY) || "null");
+    if (!account) return "";
+    return [account.name, account.email].filter(Boolean).join(" · ");
+  } catch {
+    return "";
+  }
+}
+
+function dbxBase64Url(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function dbxRandomVerifier() {
+  const bytes = new Uint8Array(48);
+  crypto.getRandomValues(bytes);
+  return dbxBase64Url(bytes);
+}
+
+async function dbxCodeChallenge(verifier) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  return dbxBase64Url(new Uint8Array(digest));
+}
+
+function dbxRedirectUri() {
+  return location.origin + location.pathname;
+}
+
+async function dbxConnect() {
+  const input = document.querySelector("#dbxAppKey");
+  const appKey = (input ? input.value : "").trim();
+  if (!appKey) {
+    alert("Dropbox App Key를 입력해 주세요.");
+    return;
+  }
+  localStorage.setItem(DBX_APPKEY_KEY, appKey);
+  const verifier = dbxRandomVerifier();
+  localStorage.setItem(DBX_VERIFIER_KEY, verifier);
+  const challenge = await dbxCodeChallenge(verifier);
+  const params = new URLSearchParams({
+    client_id: appKey,
+    redirect_uri: dbxRedirectUri(),
+    response_type: "code",
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    token_access_type: "offline",
+  });
+  location.href = `https://www.dropbox.com/oauth2/authorize?${params}`;
+}
+
+async function dbxCompleteAuth(code) {
+  const appKey = localStorage.getItem(DBX_APPKEY_KEY);
+  const verifier = localStorage.getItem(DBX_VERIFIER_KEY);
+  if (!appKey || !verifier) return;
+  try {
+    const res = await fetch("https://api.dropboxapi.com/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        grant_type: "authorization_code",
+        client_id: appKey,
+        redirect_uri: dbxRedirectUri(),
+        code_verifier: verifier,
+      }),
+    });
+    const data = await res.json();
+    if (data.refresh_token) localStorage.setItem(DBX_REFRESH_KEY, data.refresh_token);
+    if (data.access_token) localStorage.setItem(DBX_TOKEN_KEY, data.access_token);
+    if (data.access_token) {
+      try {
+        const accountRes = await fetch("https://api.dropboxapi.com/2/users/get_current_account", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${data.access_token}` },
+        });
+        const account = await accountRes.json();
+        localStorage.setItem(
+          DBX_ACCOUNT_KEY,
+          JSON.stringify({ name: account.name?.display_name || "", email: account.email || "" }),
+        );
+      } catch {
+        // 계정 정보 조회 실패는 무시 (연결 자체는 성공)
+      }
+    }
+  } catch {
+    alert("Dropbox 연결에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+  } finally {
+    localStorage.removeItem(DBX_VERIFIER_KEY);
+  }
+}
+
+async function dbxRefreshToken() {
+  const refresh = localStorage.getItem(DBX_REFRESH_KEY);
+  const appKey = localStorage.getItem(DBX_APPKEY_KEY);
+  if (!refresh || !appKey) return null;
+  try {
+    const res = await fetch("https://api.dropboxapi.com/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refresh, client_id: appKey }),
+    });
+    const data = await res.json();
+    if (data.access_token) {
+      localStorage.setItem(DBX_TOKEN_KEY, data.access_token);
+      return data.access_token;
+    }
+  } catch {
+    // 네트워크 오류 등은 null 반환
+  }
+  return null;
+}
+
+async function dbxPushArchive() {
+  if (!dbxConnected()) return false;
+  const body = JSON.stringify(loadArchive());
+  const arg = JSON.stringify({ path: DBX_ARCHIVE_PATH, mode: "overwrite", autorename: false, mute: true });
+  const upload = (token) =>
+    fetch("https://content.dropboxapi.com/2/files/upload", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/octet-stream",
+        "Dropbox-API-Arg": arg,
+      },
+      body,
+    });
+  let token = localStorage.getItem(DBX_TOKEN_KEY);
+  let res = token ? await upload(token) : { status: 401, ok: false };
+  if (res.status === 401) {
+    token = await dbxRefreshToken();
+    if (token) res = await upload(token);
+  }
+  return Boolean(res && res.ok);
+}
+
+async function dbxDownloadArchive() {
+  if (!dbxConnected()) return { status: "error" };
+  const arg = JSON.stringify({ path: DBX_ARCHIVE_PATH });
+  const download = (token) =>
+    fetch("https://content.dropboxapi.com/2/files/download", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Dropbox-API-Arg": arg },
+    });
+  let token = localStorage.getItem(DBX_TOKEN_KEY);
+  let res = token ? await download(token) : { status: 401, ok: false };
+  if (res.status === 401) {
+    token = await dbxRefreshToken();
+    if (token) res = await download(token);
+  }
+  if (res.status === 409) return { status: "empty" }; // 아직 백업 파일 없음
+  if (!res.ok) return { status: "error" };
+  try {
+    const list = JSON.parse(await res.text());
+    return { status: "ok", list: Array.isArray(list) ? list : [] };
+  } catch {
+    return { status: "error" };
+  }
+}
+
+function dbxMergeArchives(localList, remoteList) {
+  const byId = new Map();
+  for (const item of remoteList) if (item && item.id) byId.set(item.id, item);
+  for (const item of localList) {
+    if (!item || !item.id) continue;
+    const existing = byId.get(item.id);
+    const localTime = new Date(item.savedAt || 0).getTime();
+    const remoteTime = existing ? new Date(existing.savedAt || 0).getTime() : -1;
+    if (!existing || localTime >= remoteTime) byId.set(item.id, item);
+  }
+  return Array.from(byId.values()).sort(
+    (a, b) => new Date(b.savedAt || 0).getTime() - new Date(a.savedAt || 0).getTime(),
+  );
+}
+
+function dbxMarkSynced() {
+  localStorage.setItem(DBX_LASTSYNC_KEY, new Date().toISOString());
+}
+
+// 다운로드→병합→업로드 (수동 '지금 동기화' + 계약 완료 시 자동)
+async function dbxSyncNow() {
+  if (!dbxConnected()) return false;
+  const remote = await dbxDownloadArchive();
+  if (remote.status === "error") return false;
+  if (remote.status === "ok") {
+    saveArchiveList(dbxMergeArchives(loadArchive(), remote.list));
+  }
+  const ok = await dbxPushArchive();
+  if (ok) dbxMarkSynced();
+  return ok;
+}
+
+// 앱 시작 시: 다운로드→병합만 (로컬을 덮어쓸 위험 없이 원격 항목을 가져옴)
+async function dbxInitSync() {
+  if (!dbxConnected()) return;
+  const remote = await dbxDownloadArchive();
+  if (remote.status === "ok") {
+    saveArchiveList(dbxMergeArchives(loadArchive(), remote.list));
+    dbxMarkSynced();
+    if (elements.archive && !elements.archive.hidden) renderArchiveList();
+  }
+  renderDbxPanel();
+}
+
+// 계약 완료(추가) 시 자동: 원격과 병합 후 업로드
+function dbxAutoSync() {
+  if (!dbxConnected()) return;
+  dbxSyncNow()
+    .then(() => renderDbxPanel())
+    .catch(() => {});
+}
+
+// 삭제 시 자동: 병합 없이 로컬을 그대로 업로드해 원격에서도 삭제되게 함
+function dbxAutoPush() {
+  if (!dbxConnected()) return;
+  dbxPushArchive()
+    .then((ok) => {
+      if (ok) {
+        dbxMarkSynced();
+        renderDbxPanel();
+      }
+    })
+    .catch(() => {});
+}
+
+function dbxDisconnect() {
+  if (!confirm("Dropbox 연결을 해제할까요? 이 기기의 보관함 내용은 그대로 남습니다.")) return;
+  [DBX_REFRESH_KEY, DBX_TOKEN_KEY, DBX_ACCOUNT_KEY, DBX_LASTSYNC_KEY, DBX_VERIFIER_KEY].forEach((key) =>
+    localStorage.removeItem(key),
+  );
+  renderDbxPanel();
+}
+
+async function runDbxSync(button) {
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "동기화 중…";
+  try {
+    const ok = await dbxSyncNow();
+    if (!ok) alert("Dropbox 동기화에 실패했습니다. 연결 상태와 인터넷을 확인해 주세요.");
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+    renderArchiveList();
+    renderDbxPanel();
+  }
+}
+
+function renderDbxPanel() {
+  const panel = elements.dbxPanel;
+  if (!panel) return;
+  if (dbxConnected()) {
+    const account = dbxAccountLabel();
+    const last = localStorage.getItem(DBX_LASTSYNC_KEY);
+    panel.innerHTML = `
+      <div class="dbx-connected">
+        <div class="dbx-status">
+          <strong>Dropbox 연결됨</strong>
+          ${account ? `<span>${escapeHtml(account)}</span>` : ""}
+          <span class="dbx-sync-time">${
+            last ? `마지막 동기화 ${escapeHtml(formatKoreanDateTime(last))}` : "아직 동기화되지 않음"
+          }</span>
+        </div>
+        <div class="dbx-actions">
+          <button class="secondary-button small" type="button" data-action="dbx-sync">지금 동기화</button>
+          <button class="danger-button small" type="button" data-action="dbx-disconnect">연결 해제</button>
+        </div>
+      </div>`;
+  } else {
+    const appKey = escapeHtml(localStorage.getItem(DBX_APPKEY_KEY) || "");
+    const redirectUri = escapeHtml(dbxRedirectUri());
+    panel.innerHTML = `
+      <div class="dbx-connect">
+        <strong>Dropbox에 백업</strong>
+        <p class="field-help">보관함을 Dropbox에 백업하면 기기를 바꾸거나 브라우저 데이터를 지워도 계약이 남습니다. 계약을 완료할 때마다 자동으로 올라갑니다.</p>
+        <div class="dbx-connect-row">
+          <input class="dbx-input" id="dbxAppKey" type="text" inputmode="latin" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Dropbox App Key" value="${appKey}" />
+          <button class="primary-button small" type="button" data-action="dbx-connect">연결하기</button>
+        </div>
+        <details class="dbx-guide">
+          <summary>App Key 만드는 방법</summary>
+          <ol>
+            <li>Dropbox 개발자 콘솔(dropbox.com/developers/apps)에서 <b>Create app</b></li>
+            <li>Scoped access → <b>App folder</b> 선택 후 앱 이름 입력</li>
+            <li>Permissions 탭에서 <b>files.content.write</b>, <b>files.content.read</b> 체크 → Submit</li>
+            <li>Settings 탭 → OAuth 2 → Redirect URIs에 이 주소 추가:<br><code>${redirectUri}</code></li>
+            <li>같은 화면의 <b>App key</b>를 복사해 위 칸에 붙여넣고 연결하기</li>
+          </ol>
+        </details>
+      </div>`;
+  }
+}
+
+async function initDropbox() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get("code");
+  if (code) {
+    await dbxCompleteAuth(code);
+    // 인증 코드가 붙은 URL을 깨끗하게 정리
+    history.replaceState(null, "", dbxRedirectUri());
+  }
+  renderDbxPanel();
+  dbxInitSync();
 }
 
 /* ── 이미지·PDF 내보내기 ── */

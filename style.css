@@ -205,6 +205,112 @@ h3 {
   border-top: 1px solid var(--sep);
 }
 
+/* ── Dropbox 백업 패널 ── */
+.dbx-panel {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--sep);
+  border-radius: var(--rm);
+  background: var(--fill2);
+}
+
+.dbx-panel:empty {
+  display: none;
+}
+
+.dbx-panel strong {
+  font-size: 14px;
+}
+
+.dbx-connect .field-help {
+  margin: 4px 0 10px;
+}
+
+.dbx-connect-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.dbx-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--sep2);
+  border-radius: var(--rs);
+  background: var(--card);
+  color: var(--label);
+  font-size: 14px;
+}
+
+.dbx-input:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.dbx-connect-row .primary-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.dbx-guide {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--label2);
+}
+
+.dbx-guide summary {
+  cursor: pointer;
+  color: var(--blue-txt);
+}
+
+.dbx-guide ol {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.dbx-guide code {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--fill);
+  color: var(--label);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.dbx-connected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dbx-status {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dbx-status span {
+  color: var(--label2);
+  font-size: 12px;
+}
+
+.dbx-sync-time {
+  color: var(--green-txt);
+}
+
+.dbx-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .intro {
   padding: 24px 20px;
 }
