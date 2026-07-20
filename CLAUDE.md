@@ -32,12 +32,14 @@ git push origin main
 ```
 
 ## ⚠️ 버전 올리기 규칙 (매우 중요)
-코드를 고칠 때마다 **세 곳의 버전을 함께** 올려야 사용자에게 반영된다:
+코드를 고칠 때마다 **네 곳의 버전을 함께** 올려야 사용자에게 반영된다:
 1. `index.html` 의 `style.css?v=N` 과 `app.js?v=N`
 2. `service-worker.js` 의 `CACHE_VERSION` (예: `easy-loan-note-v15-...`)
 3. `service-worker.js` APP_SHELL 안의 `./style.css?v=N`, `./app.js?v=N`
+4. `app.js` 상단의 `APP_VERSION`(예: `"v21"`) — 화면 좌상단 제목 옆 버전 칩에 표시됨
 
-현재 버전: **v20**. (다음에 고치면 v21로)
+형식은 정수 하나씩 증가(v20 → v21 → v22 ...). 소수점(v2.0) 아님.
+현재 버전: **v21**. (다음에 고치면 v22로)
 
 ## ⚠️ 서비스워커 캐시 — 새로고침 두 번
 cache-first 방식이라, 배포 후 기존 사용자는 **첫 새로고침엔 이전 버전, 한 번 더 새로고침해야 새 버전**이 뜬다.

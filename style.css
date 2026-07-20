@@ -119,6 +119,15 @@ h1 {
   letter-spacing: -.4px;
 }
 
+.version-chip {
+  margin-left: 6px;
+  color: var(--label3);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  vertical-align: middle;
+}
+
 h2 {
   font-size: 17px;
   font-weight: 700;
