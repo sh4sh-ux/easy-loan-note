@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v28";
+const APP_VERSION = "v29";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -458,7 +458,7 @@ function goToStep(stepIndex) {
     else item.removeAttribute("aria-current");
   });
 
-  elements.progressFill.style.width = `${(stepIndex / (steps.length - 1)) * 100}%`;
+  elements.progressFill.style.width = `${((stepIndex + 1) / steps.length) * 100}%`;
   const prevButton = elements.form.querySelector('[data-action="prev"]');
   const nextButton = elements.form.querySelector('[data-action="next"]');
   const completeButton = elements.form.querySelector('[data-action="complete"]');

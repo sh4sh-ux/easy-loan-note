@@ -13,7 +13,7 @@
     <link rel="manifest" href="./manifest.json" />
     <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png" />
     <link rel="apple-touch-icon" href="./icons/icon-180.png" />
-    <link rel="stylesheet" href="./style.css?v=28" />
+    <link rel="stylesheet" href="./style.css?v=29" />
   </head>
   <body>
     <a class="skip-link" href="#main">본문으로 이동</a>
@@ -62,7 +62,6 @@
         <section class="workspace no-print" aria-label="차용증 작성 영역" hidden>
           <div class="workspace-top">
             <span id="saveBadge" class="save-badge" aria-live="polite"></span>
-            <button class="ghost-button" type="button" data-action="download-draft-file">초안 파일로 저장</button>
           </div>
           <nav class="progress" aria-label="작성 단계">
             <ol id="stepList"></ol>
@@ -459,6 +458,7 @@
             <p class="form-error" id="formError" role="alert" aria-live="assertive"></p>
 
             <div class="form-nav">
+              <button class="ghost-button" type="button" data-action="download-draft-file">초안 파일로 저장</button>
               <button class="secondary-button" type="button" data-action="prev">이전</button>
               <button class="primary-button" type="button" data-action="next">다음</button>
               <button class="primary-button" type="button" data-action="complete" hidden>계약 완료</button>
@@ -486,6 +486,6 @@
     </div>
 
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
-    <script src="./app.js?v=28" defer></script>
+    <script src="./app.js?v=29" defer></script>
   </body>
 </html>
