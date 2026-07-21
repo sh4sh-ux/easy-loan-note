@@ -28,6 +28,7 @@
 
   <!-- full-bleed background (maskable-safe) -->
   <rect width="512" height="512" fill="url(#bg)"/>
+  <g transform="translate(0 -16)">
 
   <!-- document -->
   <g filter="url(#soft)">
@@ -50,7 +51,7 @@
   </g>
 
   <!-- fountain pen (12% smaller), nib tip meeting the signature at (300,343) -->
-  <g filter="url(#penShadow)" transform="translate(300 343) rotate(40) scale(0.88)">
+  <g filter="url(#penShadow)" transform="translate(300 343) rotate(40) scale(0.79)">
     <!-- barrel -->
     <rect x="-17" y="-244" width="34" height="128" rx="17" fill="url(#barrel)"/>
     <!-- clip -->
@@ -67,5 +68,6 @@
     <!-- breather hole + slit -->
     <circle cx="0" cy="-50" r="6.5" fill="#96701E"/>
     <rect x="-2.2" y="-50" width="4.4" height="42" rx="2.2" fill="#96701E"/>
+  </g>
   </g>
 </svg>
