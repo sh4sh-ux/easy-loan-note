@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v24";
+const APP_VERSION = "v25";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -1007,6 +1007,28 @@ async function dbxRefreshToken() {
   return null;
 }
 
+// 마지막 Dropbox 오류를 사람이 읽을 수 있는 안내로 보관 (동기화 실패 시 표시)
+let dbxLastError = "";
+
+function dbxSetError(status, bodyText) {
+  const body = (bodyText || "").slice(0, 400);
+  if (status === "network") {
+    dbxLastError = "네트워크에 연결하지 못했습니다. 인터넷 연결을 확인해 주세요.";
+  } else if (status === "parse") {
+    dbxLastError = "Dropbox의 백업 파일을 읽지 못했습니다(형식 오류).";
+  } else if (status === 401 && /missing_scope/.test(body)) {
+    dbxLastError =
+      "Dropbox 앱에 파일 권한이 없습니다. 개발자 콘솔 → Permissions에서 " +
+      "files.content.write · files.content.read를 켜고 Submit한 뒤, 아래 '연결 해제'를 누르고 다시 연결해 주세요.";
+  } else if (status === 401) {
+    dbxLastError = "Dropbox 인증이 만료되었거나 유효하지 않습니다. '연결 해제' 후 다시 연결해 주세요.";
+  } else if (status === 403) {
+    dbxLastError = "Dropbox 접근이 거부되었습니다(권한 부족). 개발자 콘솔에서 앱 권한을 확인해 주세요.";
+  } else {
+    dbxLastError = `Dropbox 오류 (${status})` + (body ? `: ${body}` : "");
+  }
+}
+
 async function dbxPushArchive() {
   if (!dbxConnected()) return false;
   const body = JSON.stringify(loadArchive());
@@ -1021,13 +1043,20 @@ async function dbxPushArchive() {
       },
       body,
     });
-  let token = localStorage.getItem(DBX_TOKEN_KEY);
-  let res = token ? await upload(token) : { status: 401, ok: false };
-  if (res.status === 401) {
-    token = await dbxRefreshToken();
-    if (token) res = await upload(token);
+  try {
+    let token = localStorage.getItem(DBX_TOKEN_KEY);
+    let res = token ? await upload(token) : null;
+    if (!res || res.status === 401) {
+      token = await dbxRefreshToken();
+      if (token) res = await upload(token);
+    }
+    if (res && res.ok) return true;
+    dbxSetError(res ? res.status : 401, res ? await res.text().catch(() => "") : "");
+    return false;
+  } catch (error) {
+    dbxSetError("network", error && error.message);
+    return false;
   }
-  return Boolean(res && res.ok);
 }
 
 async function dbxDownloadArchive() {
@@ -1038,18 +1067,27 @@ async function dbxDownloadArchive() {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Dropbox-API-Arg": arg },
     });
-  let token = localStorage.getItem(DBX_TOKEN_KEY);
-  let res = token ? await download(token) : { status: 401, ok: false };
-  if (res.status === 401) {
-    token = await dbxRefreshToken();
-    if (token) res = await download(token);
-  }
-  if (res.status === 409) return { status: "empty" }; // 아직 백업 파일 없음
-  if (!res.ok) return { status: "error" };
   try {
-    const list = JSON.parse(await res.text());
-    return { status: "ok", list: Array.isArray(list) ? list : [] };
-  } catch {
+    let token = localStorage.getItem(DBX_TOKEN_KEY);
+    let res = token ? await download(token) : null;
+    if (!res || res.status === 401) {
+      token = await dbxRefreshToken();
+      if (token) res = await download(token);
+    }
+    if (res && res.status === 409) return { status: "empty" }; // 아직 백업 파일 없음
+    if (res && res.ok) {
+      try {
+        const list = JSON.parse(await res.text());
+        return { status: "ok", list: Array.isArray(list) ? list : [] };
+      } catch {
+        dbxSetError("parse", "");
+        return { status: "error" };
+      }
+    }
+    dbxSetError(res ? res.status : 401, res ? await res.text().catch(() => "") : "");
+    return { status: "error" };
+  } catch (error) {
+    dbxSetError("network", error && error.message);
     return { status: "error" };
   }
 }
@@ -1131,9 +1169,10 @@ async function runDbxSync(button) {
   const original = button.textContent;
   button.disabled = true;
   button.textContent = "동기화 중…";
+  dbxLastError = "";
   try {
     const ok = await dbxSyncNow();
-    if (!ok) alert("Dropbox 동기화에 실패했습니다. 연결 상태와 인터넷을 확인해 주세요.");
+    if (!ok) alert(dbxLastError || "Dropbox 동기화에 실패했습니다. 연결 상태와 인터넷을 확인해 주세요.");
   } finally {
     button.disabled = false;
     button.textContent = original;
