@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v29";
+const APP_VERSION = "v30";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -263,9 +263,13 @@ function handleDocumentClick(event) {
       break;
     case "prev":
       goToStep(Math.max(0, state.currentStep - 1));
+      scrollToWorkspaceTop();
       break;
     case "next":
-      if (validateCurrentStep()) goToStep(Math.min(steps.length - 1, state.currentStep + 1));
+      if (validateCurrentStep()) {
+        goToStep(Math.min(steps.length - 1, state.currentStep + 1));
+        scrollToWorkspaceTop();
+      }
       break;
     case "complete":
       completeContract();
@@ -423,12 +427,18 @@ function renderStepList() {
   });
 }
 
+// 단계 전환 시 항상 상단부터 보이도록 (데스크탑에서 프레임이 튀어 보이지 않게)
+function scrollToWorkspaceTop() {
+  window.scrollTo({ top: 0 });
+}
+
 function requestStep(target) {
   if (!Number.isInteger(target) || target === state.currentStep) return;
 
   // 뒤로는 자유롭게 이동
   if (target < state.currentStep) {
     goToStep(target);
+    scrollToWorkspaceTop();
     return;
   }
 
@@ -441,6 +451,7 @@ function requestStep(target) {
     if (state.currentStep < 3 && !validateCurrentStep()) return;
     goToStep(state.currentStep + 1);
   }
+  scrollToWorkspaceTop();
 
   if (target > maxStep) {
     elements.formError.textContent = "서명 단계에서 '계약 완료'를 누르면 완료 화면으로 이동합니다.";

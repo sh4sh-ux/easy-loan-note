@@ -492,6 +492,13 @@ form {
   min-height: 380px;
 }
 
+/* 데스크탑: 단계 전환 시 카드 높이가 튀지 않도록 프레임 고정 */
+@media (min-width: 721px) {
+  .step-panel {
+    min-height: 800px;
+  }
+}
+
 .section-heading {
   display: flex;
   flex-direction: column;
