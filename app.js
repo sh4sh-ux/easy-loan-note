@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v27";
+const APP_VERSION = "v28";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -58,6 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
   registerServiceWorker();
   renderAttachmentList();
   updateAll();
+  renderResumeCard();
   initDropbox();
 });
 
@@ -83,6 +84,9 @@ function cacheElements() {
   elements.archive = document.querySelector(".archive");
   elements.archiveList = document.querySelector("#archiveList");
   elements.dbxPanel = document.querySelector("#dbxPanel");
+  elements.resumeCard = document.querySelector("#resumeCard");
+  elements.saveBadge = document.querySelector("#saveBadge");
+  elements.importDraftInput = document.querySelector("#importDraftInput");
   elements.attachmentInput = document.querySelector("#attachmentInput");
   elements.attachmentList = document.querySelector("#attachmentList");
   elements.importJsonInput = document.querySelector("#importJsonInput");
@@ -120,6 +124,11 @@ function bindEvents() {
     const file = elements.importJsonInput.files[0];
     elements.importJsonInput.value = "";
     if (file) await importJsonBackup(file);
+  });
+  elements.importDraftInput.addEventListener("change", async () => {
+    const file = elements.importDraftInput.files[0];
+    elements.importDraftInput.value = "";
+    if (file) await importDraftFile(file);
   });
   elements.includeAuditToggle.addEventListener("change", () => {
     state.includeAudit = elements.includeAuditToggle.checked;
@@ -277,6 +286,12 @@ function handleDocumentClick(event) {
     case "home":
       backToIntro();
       break;
+    case "download-draft-file":
+      downloadDraftFile();
+      break;
+    case "import-draft-file":
+      elements.importDraftInput.click();
+      break;
     case "archive":
       showArchive();
       break;
@@ -356,6 +371,8 @@ function showWorkspace() {
   elements.intro.hidden = true;
   elements.archive.hidden = true;
   elements.workspace.hidden = false;
+  const snap = getDraftSnapshot();
+  if (snap && snap.exportedAt) updateSaveBadge(snap.exportedAt);
   goToStep(state.currentStep);
 }
 
@@ -370,13 +387,15 @@ function showArchive() {
 function closeArchive() {
   elements.archive.hidden = true;
   elements.intro.hidden = false;
+  renderResumeCard();
 }
 
-// 작성 화면에서 인트로로 돌아가기 (작성 내용은 저장돼 있어 '작성 중인 내용 보기'로 이어감)
+// 작성 화면에서 인트로로 돌아가기 (작성 내용은 저장돼 있어 '이어서 작성'으로 이어감)
 function backToIntro() {
   elements.workspace.hidden = true;
   elements.archive.hidden = true;
   elements.intro.hidden = false;
+  renderResumeCard();
   window.scrollTo({ top: 0 });
 }
 
@@ -652,6 +671,8 @@ async function completeContract() {
   updateCompletionSummary();
   state.currentStep = 5;
   localStorage.removeItem(STORAGE_KEY);
+  window.clearTimeout(draftDbxTimer);
+  dbxDeleteDraft().catch(() => {}); // 완료된 초안은 원격에서도 제거
   try {
     localStorage.setItem(COMPLETED_STORAGE_KEY, JSON.stringify(exportState()));
   } catch {
@@ -1134,6 +1155,8 @@ async function dbxInitSync() {
     if (elements.archive && !elements.archive.hidden) renderArchiveList();
   }
   renderDbxPanel();
+  // 초안도 원격에서 가져오기(다른 기기에서 이어가기)
+  dbxPullDraftIfNewer().catch(() => {});
 }
 
 // 계약 완료(추가) 시 자동: 원격과 병합 후 업로드
@@ -2232,6 +2255,8 @@ function saveDraft() {
   if (state.currentStep === steps.length - 1) return;
   readFormIntoState();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(exportState()));
+  updateSaveBadge();
+  scheduleDraftDbxUpload();
 }
 
 function restoreDraft() {
@@ -2259,6 +2284,188 @@ function restoreDraft() {
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
+}
+
+/* ── 중간 저장(초안) — 저장 상태 표시 · 파일 · Dropbox 이어가기 ── */
+
+function getDraftSnapshot() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function draftHasContent(snap) {
+  if (!snap || !snap.data) return false;
+  const d = snap.data;
+  const sig = snap.signatures || {};
+  return Boolean(
+    d.creditorName ||
+      d.debtorName ||
+      d.principalNumber ||
+      (sig.creditor && sig.creditor.dataUrl) ||
+      (sig.debtor && sig.debtor.dataUrl) ||
+      (snap.attachments && snap.attachments.length),
+  );
+}
+
+function renderResumeCard() {
+  const card = elements.resumeCard;
+  if (!card) return;
+  const snap = getDraftSnapshot();
+  if (!draftHasContent(snap)) {
+    card.hidden = true;
+    card.innerHTML = "";
+    return;
+  }
+  const who = snap.data.creditorName || snap.data.debtorName || "작성 중인 계약";
+  const stepNo = Math.min((snap.currentStep || 0) + 1, steps.length);
+  const when = snap.exportedAt ? formatKoreanDateTime(snap.exportedAt) : "";
+  card.hidden = false;
+  card.innerHTML =
+    `<div class="resume-info"><strong>이어서 작성할 내용이 있어요</strong>` +
+    `<span>${escapeHtml(who)} · ${stepNo}/${steps.length}단계${when ? " · 저장 " + escapeHtml(when) : ""}</span></div>` +
+    `<button class="primary-button small" type="button" data-action="restore">이어서 작성</button>`;
+}
+
+function updateSaveBadge(iso) {
+  const badge = elements.saveBadge;
+  if (!badge) return;
+  const t = iso ? new Date(iso) : new Date();
+  const hh = String(t.getHours()).padStart(2, "0");
+  const mm = String(t.getMinutes()).padStart(2, "0");
+  badge.textContent = `자동 저장됨 · ${hh}:${mm}`;
+  badge.classList.add("saved");
+}
+
+// 현재 작성 내용을 파일로 저장 (다른 기기로 옮기거나 상대에게 전달)
+function downloadDraftFile() {
+  const snapshot = exportState();
+  const payload = { type: "easy-loan-note-draft", version: 1, exportedAt: new Date().toISOString(), snapshot };
+  const now = new Date();
+  const stamp =
+    formatDateInput(now).replaceAll("-", "") +
+    "-" +
+    String(now.getHours()).padStart(2, "0") +
+    String(now.getMinutes()).padStart(2, "0");
+  downloadBlob(`차용증-초안-${stamp}.json`, JSON.stringify(payload, null, 2), "application/json;charset=utf-8");
+}
+
+// 초안 파일 불러와 이어서 작성
+async function importDraftFile(file) {
+  try {
+    const parsed = JSON.parse(await file.text());
+    const snap =
+      parsed && parsed.type === "easy-loan-note-draft" && parsed.snapshot
+        ? parsed.snapshot
+        : parsed && parsed.data
+          ? parsed
+          : null;
+    if (!snap || !snap.data) throw new Error("초안 파일 형식이 올바르지 않습니다.");
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
+    restoreDraft();
+    showWorkspace();
+    updateAll();
+    scheduleSave();
+  } catch (error) {
+    alert(`초안 파일을 불러오지 못했습니다: ${error && error.message ? error.message : error}`);
+  }
+}
+
+/* ── Dropbox 초안 동기화 (다른 기기에서 이어가기) ── */
+const DBX_DRAFT_PATH = "/easy-loan-note-draft.json";
+let draftDbxTimer = null;
+
+async function dbxUploadDraft() {
+  if (!dbxConnected()) return false;
+  const snap = getDraftSnapshot();
+  if (!snap) return false;
+  const arg = JSON.stringify({ path: DBX_DRAFT_PATH, mode: "overwrite", autorename: false, mute: true });
+  const upload = (token) =>
+    fetch("https://content.dropboxapi.com/2/files/upload", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/octet-stream", "Dropbox-API-Arg": arg },
+      body: JSON.stringify(snap),
+    });
+  try {
+    let token = localStorage.getItem(DBX_TOKEN_KEY);
+    let res = token ? await upload(token) : null;
+    if (!res || res.status === 401) {
+      token = await dbxRefreshToken();
+      if (token) res = await upload(token);
+    }
+    return Boolean(res && res.ok);
+  } catch {
+    return false;
+  }
+}
+
+async function dbxDownloadDraft() {
+  if (!dbxConnected()) return null;
+  const arg = JSON.stringify({ path: DBX_DRAFT_PATH });
+  const download = (token) =>
+    fetch("https://content.dropboxapi.com/2/files/download", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Dropbox-API-Arg": arg },
+    });
+  try {
+    let token = localStorage.getItem(DBX_TOKEN_KEY);
+    let res = token ? await download(token) : null;
+    if (!res || res.status === 401) {
+      token = await dbxRefreshToken();
+      if (token) res = await download(token);
+    }
+    if (!res || !res.ok) return null; // 409(파일 없음) 포함
+    return JSON.parse(await res.text());
+  } catch {
+    return null;
+  }
+}
+
+async function dbxDeleteDraft() {
+  if (!dbxConnected()) return;
+  const del = (token) =>
+    fetch("https://api.dropboxapi.com/2/files/delete_v2", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ path: DBX_DRAFT_PATH }),
+    });
+  try {
+    let token = localStorage.getItem(DBX_TOKEN_KEY);
+    let res = token ? await del(token) : null;
+    if (!res || res.status === 401) {
+      token = await dbxRefreshToken();
+      if (token) res = await del(token);
+    }
+  } catch {
+    // 삭제 실패는 무시 (다음 업로드가 덮어씀)
+  }
+}
+
+function scheduleDraftDbxUpload() {
+  if (!dbxConnected()) return;
+  window.clearTimeout(draftDbxTimer);
+  draftDbxTimer = window.setTimeout(() => {
+    dbxUploadDraft().catch(() => {});
+  }, 4000);
+}
+
+// 앱 시작 시 원격 초안이 더 최신이면 가져와 이어갈 수 있게 함
+async function dbxPullDraftIfNewer() {
+  if (!dbxConnected()) return;
+  const remote = await dbxDownloadDraft();
+  if (!draftHasContent(remote)) return;
+  const local = getDraftSnapshot();
+  const rt = new Date(remote.exportedAt || 0).getTime();
+  const lt = local ? new Date(local.exportedAt || 0).getTime() : -1;
+  if (rt <= lt) return;
+  // 작성 중이면 건드리지 않음 (인트로에 있을 때만 채택)
+  if (elements.workspace && !elements.workspace.hidden) return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
+  restoreDraft();
+  renderResumeCard();
 }
 
 function exportState() {
@@ -2291,6 +2498,8 @@ function hasDraftContent() {
 function clearAllState() {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(COMPLETED_STORAGE_KEY);
+  window.clearTimeout(draftDbxTimer);
+  dbxDeleteDraft().catch(() => {}); // 원격 초안도 정리
   elements.form.reset();
   state.currentStep = 0;
   state.data = {};

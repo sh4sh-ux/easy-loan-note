@@ -13,7 +13,7 @@
     <link rel="manifest" href="./manifest.json" />
     <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png" />
     <link rel="apple-touch-icon" href="./icons/icon-180.png" />
-    <link rel="stylesheet" href="./style.css?v=27" />
+    <link rel="stylesheet" href="./style.css?v=28" />
   </head>
   <body>
     <a class="skip-link" href="#main">본문으로 이동</a>
@@ -36,11 +36,13 @@
             이 앱은 서버 없이 브라우저 안에서만 작동합니다. 입력한 개인정보와 서명은 외부로 전송되지
             않으며, 계약 완료 후 PDF나 HTML 파일로 직접 보관합니다.
           </p>
+          <div id="resumeCard" class="resume-card" hidden></div>
           <div class="intro-actions">
             <button class="primary-button" type="button" data-action="start">새 차용증 만들기</button>
-            <button class="secondary-button" type="button" data-action="restore">작성 중인 내용 보기</button>
             <button class="secondary-button" type="button" data-action="archive">보관함</button>
+            <button class="secondary-button" type="button" data-action="import-draft-file">초안 파일 불러오기</button>
           </div>
+          <input type="file" id="importDraftInput" accept="application/json,.json" hidden />
         </section>
 
         <section class="archive no-print" aria-label="계약 보관함" hidden>
@@ -58,6 +60,10 @@
         </section>
 
         <section class="workspace no-print" aria-label="차용증 작성 영역" hidden>
+          <div class="workspace-top">
+            <span id="saveBadge" class="save-badge" aria-live="polite"></span>
+            <button class="ghost-button" type="button" data-action="download-draft-file">초안 파일로 저장</button>
+          </div>
           <nav class="progress" aria-label="작성 단계">
             <ol id="stepList"></ol>
             <div class="progress-track" aria-hidden="true">
@@ -480,6 +486,6 @@
     </div>
 
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
-    <script src="./app.js?v=27" defer></script>
+    <script src="./app.js?v=28" defer></script>
   </body>
 </html>
