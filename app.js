@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v30";
+const APP_VERSION = "v31";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -1306,16 +1306,22 @@ async function renderContractCanvas(scale = 2, pageHeightCss = 0) {
   probe.append(holder);
   document.body.append(probe);
 
-  // data URL 이미지도 비동기로 로드되므로, 크기 측정 전에 로드 완료를 기다린다.
+  // data URL 이미지도 비동기로 로드되므로, 크기 측정 전에 로드+디코드 완료를 기다린다.
+  // (대용량 이미지는 onload 후에도 디코드 전이면 크기 측정이 어긋날 수 있어 decode까지 대기)
   await Promise.all(
-    Array.from(holder.querySelectorAll("img")).map((img) =>
-      img.complete
-        ? Promise.resolve()
-        : new Promise((resolve) => {
-            img.onload = resolve;
-            img.onerror = resolve;
-          }),
-    ),
+    Array.from(holder.querySelectorAll("img")).map(async (img) => {
+      if (!img.complete) {
+        await new Promise((resolve) => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      }
+      try {
+        await img.decode();
+      } catch {
+        // 디코드 실패는 무시 (측정은 onload 기준으로 진행)
+      }
+    }),
   );
 
   // PDF용: 조항 블록이 페이지 경계에 걸리면 다음 페이지로 밀어내는 여백 삽입.
@@ -1357,7 +1363,8 @@ async function renderContractCanvas(scale = 2, pageHeightCss = 0) {
     placeholder.style.borderBottom = computed.borderBottom;
     // border-radius가 마커를 깎지 않도록 좌상단 모서리에서 12px 안쪽에 배치
     placeholder.style.background = `linear-gradient(rgb(255,${index},254),rgb(255,${index},254)) 12px 0/10px 10px no-repeat #fff`;
-    embeddedImages.push({ src: img.getAttribute("src") || "", w: rect.width, h: rect.height, index });
+    const isAttachment = Boolean(img.closest(".attachment-print"));
+    embeddedImages.push({ src: img.getAttribute("src") || "", w: rect.width, h: rect.height, index, isAttachment });
     img.replaceWith(placeholder);
   });
 
@@ -1409,12 +1416,19 @@ async function renderContractCanvas(scale = 2, pageHeightCss = 0) {
         const boxWidth = item.w * scale;
         const boxHeight = item.h * scale;
         context.fillStyle = "#fff";
-        context.fillRect(marker.x - 2, marker.y - 2, 14 * scale, 14 * scale);
+        if (item.isAttachment) {
+          // 첨부는 박스 전체를 흰색으로 덮어 마커 잔여를 확실히 제거 (밑줄 없음)
+          context.fillRect(boxX - 1, boxY - 1, boxWidth + 2, boxHeight + 2);
+        } else {
+          // 서명은 마커만 덮음 (밑줄 등 나머지 렌더 보존)
+          context.fillRect(marker.x - 2, marker.y - 2, 14 * scale, 14 * scale);
+        }
         const ratio = Math.min(boxWidth / image.naturalWidth, boxHeight / image.naturalHeight);
         const drawWidth = image.naturalWidth * ratio;
         const drawHeight = image.naturalHeight * ratio;
-        const dx = boxX + (boxWidth - drawWidth) / 2;
-        const dy = boxY + (boxHeight - drawHeight) / 2;
+        // 첨부는 좌상단 정렬(밀림 방지), 서명은 박스 중앙 정렬
+        const dx = item.isAttachment ? boxX : boxX + (boxWidth - drawWidth) / 2;
+        const dy = item.isAttachment ? boxY : boxY + (boxHeight - drawHeight) / 2;
         context.drawImage(image, dx, dy, drawWidth, drawHeight);
       } catch {
         // 개별 이미지 실패는 건너뛰고 본문은 유지
