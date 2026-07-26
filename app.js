@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v32";
+const APP_VERSION = "v33";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -1360,11 +1360,11 @@ async function renderContractCanvas(scale = 2, pageHeightCss = 0) {
     let w = rect.width;
     let h = rect.height;
     // 첨부는 일부 브라우저/iOS Safari에서 max-width가 측정 시점에 적용 안 돼 원본 크기로 잡혀
-    // 박스가 콘텐츠 폭을 넘어 이미지가 크게 밀려 나오는 문제가 있다. 자연 비율을 유지한 채 폭을 상한으로 제한한다.
-    if (isAttachment && img.naturalWidth && img.naturalHeight && contentWidth > 0) {
-      const targetW = Math.min(w || contentWidth, contentWidth);
-      w = targetW;
-      h = targetW * (img.naturalHeight / img.naturalWidth);
+    // 박스가 콘텐츠 폭을 넘어 이미지가 크게 밀려 나오는 문제가 있다.
+    // rect 자체의 비율을 유지한 채 폭을 콘텐츠 폭으로 상한 제한한다. (naturalWidth에 의존하지 않음 — iOS에서 미준비 가능)
+    if (isAttachment && contentWidth > 0 && w > contentWidth) {
+      h = h * (contentWidth / w);
+      w = contentWidth;
     }
     if (!w || !h) {
       img.remove();
@@ -1431,19 +1431,20 @@ async function renderContractCanvas(scale = 2, pageHeightCss = 0) {
         const boxHeight = item.h * scale;
         context.fillStyle = "#fff";
         if (item.isAttachment) {
-          // 첨부는 박스 전체를 흰색으로 덮어 마커 잔여를 확실히 제거 (밑줄 없음)
+          // 첨부: 박스 전체를 흰색으로 덮어 마커 잔여 제거 후, 박스를 그대로 채워 그린다.
+          // 박스가 이미지 비율로 산정돼 있어 naturalWidth에 의존하지 않아도 정확히 맞는다(iOS 안전).
           context.fillRect(boxX - 1, boxY - 1, boxWidth + 2, boxHeight + 2);
+          context.drawImage(image, boxX, boxY, boxWidth, boxHeight);
         } else {
-          // 서명은 마커만 덮음 (밑줄 등 나머지 렌더 보존)
+          // 서명: 마커만 덮고(밑줄 보존) 박스 중앙에 비율 유지 배치
           context.fillRect(marker.x - 2, marker.y - 2, 14 * scale, 14 * scale);
+          const ratio = Math.min(boxWidth / image.naturalWidth, boxHeight / image.naturalHeight) || 1;
+          const drawWidth = image.naturalWidth * ratio;
+          const drawHeight = image.naturalHeight * ratio;
+          const dx = boxX + (boxWidth - drawWidth) / 2;
+          const dy = boxY + (boxHeight - drawHeight) / 2;
+          context.drawImage(image, dx, dy, drawWidth, drawHeight);
         }
-        const ratio = Math.min(boxWidth / image.naturalWidth, boxHeight / image.naturalHeight);
-        const drawWidth = image.naturalWidth * ratio;
-        const drawHeight = image.naturalHeight * ratio;
-        // 첨부는 좌상단 정렬(밀림 방지), 서명은 박스 중앙 정렬
-        const dx = item.isAttachment ? boxX : boxX + (boxWidth - drawWidth) / 2;
-        const dy = item.isAttachment ? boxY : boxY + (boxHeight - drawHeight) / 2;
-        context.drawImage(image, dx, dy, drawWidth, drawHeight);
       } catch {
         // 개별 이미지 실패는 건너뛰고 본문은 유지
       }
