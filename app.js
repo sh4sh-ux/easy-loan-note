@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v34";
+const APP_VERSION = "v35";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -1355,15 +1355,24 @@ async function renderContractCanvas(scale = 2, pageHeightCss = 0) {
   const embeddedImages = [];
   Array.from(holder.querySelectorAll("img")).forEach((img, index) => {
     const rect = img.getBoundingClientRect();
-    const isAttachment = Boolean(img.closest(".attachment-print"));
+    // "서명이 아니면 첨부"로 판별. 서명은 iOS에서도 안정적으로 인식되므로, closest(".attachment-print")가
+    // iOS에서 실패해 첨부가 서명 경로(중앙정렬·상한없음)로 빠지던 문제를 방지.
+    const isSignature = Boolean(img.closest(".signature-print-box"));
+    const isAttachment = !isSignature;
     let w = rect.width;
     let h = rect.height;
-    // 첨부는 일부 브라우저/iOS Safari에서 max-width가 측정 시점에 적용 안 돼 원본 크기로 잡혀
-    // 박스가 콘텐츠 폭을 넘어 이미지가 크게 밀려 나오는 문제가 있다.
-    // rect 자체의 비율을 유지한 채 폭을 콘텐츠 폭으로 상한 제한한다. (naturalWidth에 의존하지 않음 — iOS에서 미준비 가능)
-    if (isAttachment && contentWidth > 0 && w > contentWidth) {
-      h = h * (contentWidth / w);
-      w = contentWidth;
+    // 첨부 크기는 getBoundingClientRect가 iOS에서 불안정하므로, 디코드된 자연 크기를 우선 사용해
+    // 콘텐츠 폭으로 상한 제한(자연 비율 유지). 자연 크기가 없으면 rect로 폴백.
+    if (isAttachment) {
+      const nW = img.naturalWidth;
+      const nH = img.naturalHeight;
+      if (nW && nH && contentWidth > 0) {
+        w = Math.min(nW, contentWidth);
+        h = w * (nH / nW);
+      } else if (contentWidth > 0 && w > contentWidth) {
+        h = h * (contentWidth / w);
+        w = contentWidth;
+      }
     }
     if (!w || !h) {
       img.remove();
