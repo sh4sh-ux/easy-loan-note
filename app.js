@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v33";
+const APP_VERSION = "v34";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -1349,9 +1349,8 @@ async function renderContractCanvas(scale = 2, pageHeightCss = 0) {
   // 렌더링된 캔버스에서 마커 픽셀을 찾아 그 위치에 실제 이미지를 합성한다.
   // (DOM 측정 좌표는 SVG 렌더와 어긋날 수 있으므로 사용하지 않는다.)
   // 콘텐츠 폭(=문서 안쪽 너비). 첨부 이미지가 이 폭을 넘지 않도록 상한으로 사용.
-  const holderCS = getComputedStyle(holder);
-  const contentWidth =
-    holder.clientWidth - (parseFloat(holderCS.paddingLeft) || 0) - (parseFloat(holderCS.paddingRight) || 0);
+  // holder.clientWidth 측정은 iOS Safari에서 불안정할 수 있어, 고정 폭(760)과 홀더 패딩(28*2)으로 계산.
+  const contentWidth = width - 56;
 
   const embeddedImages = [];
   Array.from(holder.querySelectorAll("img")).forEach((img, index) => {
@@ -1432,9 +1431,18 @@ async function renderContractCanvas(scale = 2, pageHeightCss = 0) {
         context.fillStyle = "#fff";
         if (item.isAttachment) {
           // 첨부: 박스 전체를 흰색으로 덮어 마커 잔여 제거 후, 박스를 그대로 채워 그린다.
-          // 박스가 이미지 비율로 산정돼 있어 naturalWidth에 의존하지 않아도 정확히 맞는다(iOS 안전).
-          context.fillRect(boxX - 1, boxY - 1, boxWidth + 2, boxHeight + 2);
-          context.drawImage(image, boxX, boxY, boxWidth, boxHeight);
+          // 그리기 크기는 캔버스 기하값(콘텐츠 우측 한계)으로 클램프 — DOM 측정이 iOS에서 어긋나도
+          // 캔버스 폭을 절대 넘지 않게 하여 이미지가 오른쪽으로 밀려 잘리는 문제를 원천 차단.
+          const padPx = 28 * scale;
+          const availW = Math.max(1, canvas.width - padPx - boxX);
+          let dw = boxWidth;
+          let dh = boxHeight;
+          if (dw > availW) {
+            dh = dh * (availW / dw);
+            dw = availW;
+          }
+          context.fillRect(boxX - 1, boxY - 1, dw + 2, dh + 2);
+          context.drawImage(image, boxX, boxY, dw, dh);
         } else {
           // 서명: 마커만 덮고(밑줄 보존) 박스 중앙에 비율 유지 배치
           context.fillRect(marker.x - 2, marker.y - 2, 14 * scale, 14 * scale);
