@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v35";
+const APP_VERSION = "v36";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -1319,10 +1319,22 @@ async function renderContractCanvas(scale = 2, pageHeightCss = 0) {
       try {
         await img.decode();
       } catch {
-        // 디코드 실패는 무시 (측정은 onload 기준으로 진행)
+        // 디코드 실패는 무시 (측정은 온로드 기준으로 진행)
       }
     }),
   );
+
+  // ── 별첨(첨부) 이미지는 SVG/마커 합성 파이프라인에서 제외하고, 문서 렌더 후 캔버스에 직접 그린다 ──
+  // (SVG foreignObject의 중첩 <img> 렌더·DOM 측정·마커 탐지가 iOS Safari에서 불안정 → 첨부만 결정적 방식으로 처리)
+  const attachmentDraws = [];
+  Array.from(holder.querySelectorAll(".attachment-print")).forEach((fig) => {
+    const img = fig.querySelector("img");
+    const cap = fig.querySelector("figcaption");
+    const src = img ? img.getAttribute("src") : "";
+    if (src) attachmentDraws.push({ src, name: cap ? cap.textContent.trim() : "" });
+    const container = fig.closest("section.clause") || fig;
+    container.remove();
+  });
 
   // PDF용: 조항 블록이 페이지 경계에 걸리면 다음 페이지로 밀어내는 여백 삽입.
   // DOM 측정과 SVG 렌더 사이에 줄높이 반올림 차이가 누적될 수 있어 안전 마진을 둔다.
@@ -1468,7 +1480,70 @@ async function renderContractCanvas(scale = 2, pageHeightCss = 0) {
     }
   }
 
-  return canvas;
+  if (!attachmentDraws.length) return canvas;
+
+  // ── 별첨 이미지 캔버스 직접 그리기 (결정적: 측정·마커·SVG 이미지 렌더 미사용) ──
+  const contentPx = width - 56; // 문서 안쪽 폭(px)
+  const CAP_H = 15; // 캡션 높이
+  const CAP_GAP = 6; // 캡션-이미지 간격
+  const BLOCK_GAP = 18; // 첨부 블록 간 간격
+  const PAD = 28; // 좌우 패딩
+
+  const loaded = [];
+  for (const att of attachmentDraws) {
+    try {
+      const image = await loadImageFromSrc(att.src, "첨부 이미지를 불러오지 못했습니다.");
+      loaded.push({ image, name: att.name });
+    } catch {
+      // 개별 첨부 실패는 건너뜀
+    }
+  }
+
+  // 레이아웃 계산 (CSS px). height = 문서 높이.
+  let cursor = height + 2;
+  const plan = [];
+  for (const { image, name } of loaded) {
+    const nW = image.naturalWidth || contentPx;
+    const nH = image.naturalHeight || nW;
+    const iw = Math.min(nW, contentPx);
+    const ih = iw * (nH / nW);
+    const blockH = CAP_H + CAP_GAP + ih + BLOCK_GAP;
+    // 페이지 경계 회피: 블록이 한 페이지에 들어가는데 경계에 걸치면 다음 페이지 시작으로 내림
+    if (pageHeightCss > 0 && blockH <= pageHeightCss) {
+      const startPage = Math.floor(cursor / pageHeightCss);
+      const endPage = Math.floor((cursor + blockH - 1) / pageHeightCss);
+      if (endPage > startPage) cursor = (startPage + 1) * pageHeightCss + 8;
+    }
+    plan.push({ image, name, y: cursor, iw, ih });
+    cursor += blockH;
+  }
+
+  const finalCanvas = document.createElement("canvas");
+  finalCanvas.width = width * scale;
+  finalCanvas.height = Math.ceil(cursor) * scale;
+  const fctx = finalCanvas.getContext("2d");
+  fctx.fillStyle = "#fff";
+  fctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+  fctx.drawImage(canvas, 0, 0);
+
+  fctx.textBaseline = "alphabetic";
+  for (const p of plan) {
+    // 캡션 (별첨 N · 파일명)
+    fctx.fillStyle = "#666";
+    fctx.font = `600 ${11 * scale}px -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif`;
+    if (p.name) fctx.fillText(p.name, PAD * scale, (p.y + 11) * scale);
+    // 이미지 + 테두리
+    const ix = PAD * scale;
+    const iy = (p.y + CAP_H + CAP_GAP) * scale;
+    const iwPx = p.iw * scale;
+    const ihPx = p.ih * scale;
+    fctx.drawImage(p.image, ix, iy, iwPx, ihPx);
+    fctx.strokeStyle = "#D4D4D8";
+    fctx.lineWidth = 1;
+    fctx.strokeRect(ix + 0.5, iy + 0.5, iwPx - 1, ihPx - 1);
+  }
+
+  return finalCanvas;
 }
 
 function loadImageFromSrc(src, errorMessage) {
