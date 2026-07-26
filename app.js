@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v31";
+const APP_VERSION = "v32";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -1348,23 +1348,37 @@ async function renderContractCanvas(scale = 2, pageHeightCss = 0) {
   // 각 이미지를 같은 크기의 색상 마커 플레이스홀더로 치환하고,
   // 렌더링된 캔버스에서 마커 픽셀을 찾아 그 위치에 실제 이미지를 합성한다.
   // (DOM 측정 좌표는 SVG 렌더와 어긋날 수 있으므로 사용하지 않는다.)
+  // 콘텐츠 폭(=문서 안쪽 너비). 첨부 이미지가 이 폭을 넘지 않도록 상한으로 사용.
+  const holderCS = getComputedStyle(holder);
+  const contentWidth =
+    holder.clientWidth - (parseFloat(holderCS.paddingLeft) || 0) - (parseFloat(holderCS.paddingRight) || 0);
+
   const embeddedImages = [];
   Array.from(holder.querySelectorAll("img")).forEach((img, index) => {
     const rect = img.getBoundingClientRect();
-    if (!rect.width || !rect.height) {
+    const isAttachment = Boolean(img.closest(".attachment-print"));
+    let w = rect.width;
+    let h = rect.height;
+    // 첨부는 일부 브라우저/iOS Safari에서 max-width가 측정 시점에 적용 안 돼 원본 크기로 잡혀
+    // 박스가 콘텐츠 폭을 넘어 이미지가 크게 밀려 나오는 문제가 있다. 자연 비율을 유지한 채 폭을 상한으로 제한한다.
+    if (isAttachment && img.naturalWidth && img.naturalHeight && contentWidth > 0) {
+      const targetW = Math.min(w || contentWidth, contentWidth);
+      w = targetW;
+      h = targetW * (img.naturalHeight / img.naturalWidth);
+    }
+    if (!w || !h) {
       img.remove();
       return;
     }
     const computed = getComputedStyle(img);
     const placeholder = document.createElement("div");
     placeholder.style.cssText =
-      `display:block;box-sizing:border-box;width:${rect.width}px;height:${rect.height}px;` +
+      `display:block;box-sizing:border-box;width:${w}px;height:${h}px;` +
       `margin:${computed.margin};border:${computed.border};border-radius:${computed.borderRadius};`;
     placeholder.style.borderBottom = computed.borderBottom;
     // border-radius가 마커를 깎지 않도록 좌상단 모서리에서 12px 안쪽에 배치
     placeholder.style.background = `linear-gradient(rgb(255,${index},254),rgb(255,${index},254)) 12px 0/10px 10px no-repeat #fff`;
-    const isAttachment = Boolean(img.closest(".attachment-print"));
-    embeddedImages.push({ src: img.getAttribute("src") || "", w: rect.width, h: rect.height, index, isAttachment });
+    embeddedImages.push({ src: img.getAttribute("src") || "", w, h, index, isAttachment });
     img.replaceWith(placeholder);
   });
 
