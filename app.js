@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v37";
+const APP_VERSION = "v38";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -1290,11 +1290,45 @@ function generateLinkPassword() {
   return out;
 }
 
+// 긴 Dropbox 링크를 무료 단축 서비스(is.gd·v.gd)로 줄인다. 실패하면 "" 반환(원본 사용).
+// 브라우저에서 직접 호출하므로 CORS를 지원하는 서비스만 사용. 최선 노력(best-effort).
+async function shortenUrl(longUrl) {
+  const endpoints = [
+    "https://is.gd/create.php?format=simple&url=" + encodeURIComponent(longUrl),
+    "https://v.gd/create.php?format=simple&url=" + encodeURIComponent(longUrl),
+  ];
+  for (const ep of endpoints) {
+    try {
+      const res = await fetch(ep);
+      if (!res.ok) continue;
+      const text = (await res.text()).trim();
+      if (/^https?:\/\/\S+$/.test(text)) return text;
+    } catch {
+      // 다음 후보 서비스로
+    }
+  }
+  return "";
+}
+
 async function createShareLink(button) {
   if (!dbxConnected()) {
     alert("먼저 보관함(⋯)에서 Dropbox를 연결해 주세요.");
     return;
   }
+
+  // 비밀번호 직접 설정: 제안값을 채워 주고, 그대로 두거나 원하는 값으로 바꿀 수 있음.
+  // 비우면 비밀번호 없이(누구나 열람) 생성. 취소하면 전체 중단.
+  const input = window.prompt(
+    "공유 링크에 걸 비밀번호를 정하세요. (6자 이상)\n제안된 값을 그대로 써도 되고, 원하는 값으로 바꿔도 됩니다.\n비워두면 비밀번호 없이(누구나 열람) 만들어집니다.",
+    generateLinkPassword(),
+  );
+  if (input === null) return; // 취소
+  const password = input.trim();
+  if (password && password.length < 6) {
+    alert("비밀번호는 6자 이상으로 정해 주세요.");
+    return;
+  }
+
   const original = button.textContent;
   button.disabled = true;
   button.textContent = "링크 만드는 중…";
@@ -1306,7 +1340,8 @@ async function createShareLink(button) {
     const stamp =
       formatDateInput(now).replaceAll("-", "") +
       String(now.getHours()).padStart(2, "0") +
-      String(now.getMinutes()).padStart(2, "0");
+      String(now.getMinutes()).padStart(2, "0") +
+      String(now.getSeconds()).padStart(2, "0");
     const path = `/shared/${num}-${stamp}.pdf`; // ASCII 경로(한글 헤더 문제 회피)
 
     const uploaded = await dbxUploadBytes(path, new Blob([bytes], { type: "application/pdf" }));
@@ -1315,18 +1350,7 @@ async function createShareLink(button) {
       return;
     }
 
-    const password = generateLinkPassword();
-    let result = await dbxCreateSharedLink(path, password);
-    let withPassword = true;
-    // 비밀번호 설정을 지원하지 않는 플랜 등 → 비밀번호 없이 재시도
-    if (result.error && !/missing_scope/.test(result.error)) {
-      const plain = await dbxCreateSharedLink(path, "");
-      if (plain.url) {
-        result = plain;
-        withPassword = false;
-      }
-    }
-
+    const result = await dbxCreateSharedLink(path, password);
     if (!result.url) {
       if (/missing_scope/.test(result.error || "")) {
         alert(
@@ -1339,7 +1363,11 @@ async function createShareLink(button) {
       return;
     }
 
-    renderShareLinkResult(result.url, withPassword ? password : "");
+    // 링크 단축(최선 노력) — 실패하면 원본 링크 그대로 사용
+    button.textContent = "링크 줄이는 중…";
+    const shortUrl = await shortenUrl(result.url);
+
+    renderShareLinkResult(shortUrl || result.url, password, Boolean(shortUrl));
   } catch (error) {
     alert("공유 링크 생성 중 오류: " + ((error && error.message) || error));
   } finally {
@@ -1348,18 +1376,18 @@ async function createShareLink(button) {
   }
 }
 
-function renderShareLinkResult(url, password) {
+function renderShareLinkResult(url, password, shortened) {
   const el = elements.shareLinkResult;
   if (!el) return;
   const pwBlock = password
     ? `<div class="share-row"><span class="share-label">비밀번호</span>` +
       `<code class="share-val">${escapeHtml(password)}</code>` +
       `<button class="secondary-button small" type="button" data-copy="${escapeHtml(password)}">복사</button></div>`
-    : `<p class="share-warn">⚠️ 이 링크는 <b>비밀번호 없이 누구나</b> 열람할 수 있습니다. (플랜이 비밀번호를 지원하지 않아 미적용) 링크 관리에 유의하세요.</p>`;
+    : `<p class="share-warn">⚠️ 이 링크는 <b>비밀번호 없이 누구나</b> 열람할 수 있습니다. 링크 관리에 유의하세요.</p>`;
   el.hidden = false;
   el.innerHTML =
     `<div class="share-title">공유 링크가 만들어졌어요</div>` +
-    `<div class="share-row"><span class="share-label">링크</span>` +
+    `<div class="share-row"><span class="share-label">${shortened ? "짧은 링크" : "링크"}</span>` +
     `<code class="share-val share-url">${escapeHtml(url)}</code>` +
     `<button class="secondary-button small" type="button" data-copy="${escapeHtml(url)}">복사</button></div>` +
     pwBlock +
