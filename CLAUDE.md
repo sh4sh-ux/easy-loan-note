@@ -39,7 +39,7 @@ git push origin main
 4. `app.js` 상단의 `APP_VERSION`(예: `"v21"`) — 화면 좌상단 제목 옆 버전 칩에 표시됨
 
 형식은 정수 하나씩 증가(v20 → v21 → v22 ...). 소수점(v2.0) 아님.
-현재 버전: **v39**. (다음에 고치면 v40으로)
+현재 버전: **v40**. (다음에 고치면 v41로)
 
 ## ⚠️ 서비스워커 캐시 — 새로고침 두 번
 cache-first 방식이라, 배포 후 기존 사용자는 **첫 새로고침엔 이전 버전, 한 번 더 새로고침해야 새 버전**이 뜬다.
@@ -73,6 +73,12 @@ cache-first 방식이라, 배포 후 기존 사용자는 **첫 새로고침엔 �
   여러 곳 순서대로 시도하도록 `shortenUrl` 재작성: cleanuri(POST form→result_url) → spoo.me(POST form→short_url) →
   is.gd → v.gd. 전부 form-urlencoded/GET+허용 헤더라 preflight 없음. 유효 http(s)이고 원본보다 짧을 때만 채택, 하나라도
   되면 사용·전부 막히면 원본. (샌드박스 egress가 단축 호스트를 403으로 막아 CORS는 실브라우저에서만 검증 가능.)
+- **TinyURL 토큰 단축(v40)**: 무키 단축 서비스들이 사용자 브라우저 CORS에서 전부 막혀(v39도 원본 링크) 안정적 대안 추가.
+  완료 화면 '짧은 링크(TinyURL) 설정'(`.linklike`, data-action `tinyurl-setup`)에서 TinyURL API 토큰을 등록(localStorage
+  `easy-loan-note:tinyurl:token`, 이 기기에만). 링크 생성 시 `getShortLink`가 토큰 있으면 `tinyurlShorten`(api.tinyurl.com
+  /create, Bearer) 우선 → 실패 시 무키 `shortenUrl` → 그래도 안 되면 원본. 401/403이면 토큰 자동 삭제+안내. 토큰 없으면
+  기존과 동일(무키 시도→원본). ⚠️ TinyURL도 Authorization 헤더라 preflight가 걸려 브라우저 CORS를 최종 보장은 못 함 —
+  되면 tinyurl.com/xxxx, 안 되면 원본으로 안전 폴백.
 
 ## ⚠️ Dropbox 연동 메모 (v20)
 - 인증: Authorization Code + PKCE (서버·client_secret 불필요). App Key는 사용자가 보관함 UI에 직접 입력.
