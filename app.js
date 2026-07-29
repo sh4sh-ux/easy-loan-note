@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v36";
+const APP_VERSION = "v37";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -87,6 +87,7 @@ function cacheElements() {
   elements.resumeCard = document.querySelector("#resumeCard");
   elements.saveBadge = document.querySelector("#saveBadge");
   elements.importDraftInput = document.querySelector("#importDraftInput");
+  elements.shareLinkResult = document.querySelector("#shareLinkResult");
   elements.attachmentInput = document.querySelector("#attachmentInput");
   elements.attachmentList = document.querySelector("#attachmentList");
   elements.importJsonInput = document.querySelector("#importJsonInput");
@@ -206,6 +207,23 @@ function handleDocumentClick(event) {
   const action = button.dataset.action;
   const clearSignature = button.dataset.clearSignature;
 
+  if (button.dataset.copy != null) {
+    const text = button.dataset.copy;
+    const done = () => {
+      const label = button.textContent;
+      button.textContent = "복사됨";
+      setTimeout(() => {
+        button.textContent = label;
+      }, 1200);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, () => alert("복사에 실패했습니다. 직접 선택해 복사해 주세요."));
+    } else {
+      alert(text);
+    }
+    return;
+  }
+
   if (clearSignature) {
     state.signatures[clearSignature] = { dataUrl: "", signedAt: "" };
     signaturePads.get(clearSignature)?.clear();
@@ -310,6 +328,9 @@ function handleDocumentClick(event) {
       break;
     case "dbx-disconnect":
       dbxDisconnect();
+      break;
+    case "share-link":
+      createShareLink(button);
       break;
     case "download-html":
       downloadFinalHtml();
@@ -1199,6 +1220,154 @@ function dbxDisconnect() {
   renderDbxPanel();
 }
 
+/* ── Dropbox 공유 링크 (계약 PDF를 만료 없는 링크로 전달) ── */
+
+// 임의 경로에 바이트 업로드 (공유용 PDF 등). 성공 true.
+async function dbxUploadBytes(path, body) {
+  if (!dbxConnected()) return false;
+  const arg = JSON.stringify({ path, mode: "overwrite", autorename: false, mute: true });
+  const upload = (token) =>
+    fetch("https://content.dropboxapi.com/2/files/upload", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/octet-stream", "Dropbox-API-Arg": arg },
+      body,
+    });
+  try {
+    let token = localStorage.getItem(DBX_TOKEN_KEY);
+    let res = token ? await upload(token) : null;
+    if (!res || res.status === 401) {
+      token = await dbxRefreshToken();
+      if (token) res = await upload(token);
+    }
+    if (res && res.ok) return true;
+    dbxSetError(res ? res.status : 401, res ? await res.text().catch(() => "") : "");
+    return false;
+  } catch (error) {
+    dbxSetError("network", error && error.message);
+    return false;
+  }
+}
+
+// 공유 링크 생성. password 있으면 비밀번호 보호. { url } 또는 { error } 반환.
+async function dbxCreateSharedLink(path, password) {
+  const settings = password
+    ? { requested_visibility: "password", link_password: password, allow_download: true }
+    : { requested_visibility: "public", allow_download: true };
+  const call = (token) =>
+    fetch("https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ path, settings }),
+    });
+  try {
+    let token = localStorage.getItem(DBX_TOKEN_KEY);
+    let res = token ? await call(token) : null;
+    if (!res || res.status === 401) {
+      token = await dbxRefreshToken();
+      if (token) res = await call(token);
+    }
+    const text = res ? await res.text().catch(() => "") : "";
+    if (res && res.ok) {
+      try {
+        return { url: JSON.parse(text).url };
+      } catch {
+        return { error: "응답을 해석하지 못했습니다." };
+      }
+    }
+    return { error: text || (res ? String(res.status) : "network") };
+  } catch (error) {
+    return { error: (error && error.message) || "network" };
+  }
+}
+
+// 읽기 쉬운 무작위 비밀번호(혼동 문자 제외)
+function generateLinkPassword() {
+  const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const arr = new Uint32Array(8);
+  crypto.getRandomValues(arr);
+  let out = "";
+  for (let i = 0; i < arr.length; i += 1) out += chars[arr[i] % chars.length];
+  return out;
+}
+
+async function createShareLink(button) {
+  if (!dbxConnected()) {
+    alert("먼저 보관함(⋯)에서 Dropbox를 연결해 주세요.");
+    return;
+  }
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "링크 만드는 중…";
+  dbxLastError = "";
+  try {
+    const bytes = await buildContractPdfBytes();
+    const num = state.completed.contractNumber || "draft";
+    const now = new Date();
+    const stamp =
+      formatDateInput(now).replaceAll("-", "") +
+      String(now.getHours()).padStart(2, "0") +
+      String(now.getMinutes()).padStart(2, "0");
+    const path = `/shared/${num}-${stamp}.pdf`; // ASCII 경로(한글 헤더 문제 회피)
+
+    const uploaded = await dbxUploadBytes(path, new Blob([bytes], { type: "application/pdf" }));
+    if (!uploaded) {
+      alert(dbxLastError || "PDF 업로드에 실패했습니다. 연결 상태를 확인해 주세요.");
+      return;
+    }
+
+    const password = generateLinkPassword();
+    let result = await dbxCreateSharedLink(path, password);
+    let withPassword = true;
+    // 비밀번호 설정을 지원하지 않는 플랜 등 → 비밀번호 없이 재시도
+    if (result.error && !/missing_scope/.test(result.error)) {
+      const plain = await dbxCreateSharedLink(path, "");
+      if (plain.url) {
+        result = plain;
+        withPassword = false;
+      }
+    }
+
+    if (!result.url) {
+      if (/missing_scope/.test(result.error || "")) {
+        alert(
+          "공유 권한이 없습니다. Dropbox 개발자 콘솔 → Permissions에서 sharing.write를 켜고 Submit한 뒤, " +
+            "보관함에서 '연결 해제' 후 다시 연결해 주세요.",
+        );
+      } else {
+        alert("공유 링크 생성에 실패했습니다.\n" + String(result.error || "").slice(0, 200));
+      }
+      return;
+    }
+
+    renderShareLinkResult(result.url, withPassword ? password : "");
+  } catch (error) {
+    alert("공유 링크 생성 중 오류: " + ((error && error.message) || error));
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
+function renderShareLinkResult(url, password) {
+  const el = elements.shareLinkResult;
+  if (!el) return;
+  const pwBlock = password
+    ? `<div class="share-row"><span class="share-label">비밀번호</span>` +
+      `<code class="share-val">${escapeHtml(password)}</code>` +
+      `<button class="secondary-button small" type="button" data-copy="${escapeHtml(password)}">복사</button></div>`
+    : `<p class="share-warn">⚠️ 이 링크는 <b>비밀번호 없이 누구나</b> 열람할 수 있습니다. (플랜이 비밀번호를 지원하지 않아 미적용) 링크 관리에 유의하세요.</p>`;
+  el.hidden = false;
+  el.innerHTML =
+    `<div class="share-title">공유 링크가 만들어졌어요</div>` +
+    `<div class="share-row"><span class="share-label">링크</span>` +
+    `<code class="share-val share-url">${escapeHtml(url)}</code>` +
+    `<button class="secondary-button small" type="button" data-copy="${escapeHtml(url)}">복사</button></div>` +
+    pwBlock +
+    `<p class="share-note">만료 없이 언제든 열람됩니다. ${
+      password ? "<b>링크와 비밀번호를 따로</b> 전달하세요." : ""
+    } 필요 없어지면 Dropbox의 <code>/shared</code> 폴더에서 파일을 지우면 링크가 막힙니다.</p>`;
+}
+
 async function runDbxSync(button) {
   const original = button.textContent;
   button.disabled = true;
@@ -1562,7 +1731,7 @@ async function downloadContractImage() {
   await shareOrDownloadBlob(blob, `차용증-${state.completed.contractNumber || "draft"}.png`);
 }
 
-async function downloadContractPdf() {
+async function buildContractPdfBytes() {
   const A4_WIDTH = 595.28;
   const A4_HEIGHT = 841.89;
   const MARGIN = 28;
@@ -1574,7 +1743,11 @@ async function downloadContractPdf() {
   const pageHeightPx = Math.floor(contentHeightPtRaw * pxPerPt);
   const canvas = await renderContractCanvas(SCALE, pageHeightPx / SCALE);
   const { slices, contentWidthPt } = canvasToPageSlices(canvas, A4_WIDTH, A4_HEIGHT, MARGIN);
-  const bytes = buildPdf(slices, A4_WIDTH, A4_HEIGHT, MARGIN, contentWidthPt);
+  return buildPdf(slices, A4_WIDTH, A4_HEIGHT, MARGIN, contentWidthPt);
+}
+
+async function downloadContractPdf() {
+  const bytes = await buildContractPdfBytes();
   await shareOrDownloadBlob(new Blob([bytes], { type: "application/pdf" }), `차용증-${state.completed.contractNumber || "draft"}.pdf`);
 }
 

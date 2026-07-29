@@ -39,7 +39,7 @@ git push origin main
 4. `app.js` 상단의 `APP_VERSION`(예: `"v21"`) — 화면 좌상단 제목 옆 버전 칩에 표시됨
 
 형식은 정수 하나씩 증가(v20 → v21 → v22 ...). 소수점(v2.0) 아님.
-현재 버전: **v36**. (다음에 고치면 v37로)
+현재 버전: **v37**. (다음에 고치면 v38로)
 
 ## ⚠️ 서비스워커 캐시 — 새로고침 두 번
 cache-first 방식이라, 배포 후 기존 사용자는 **첫 새로고침엔 이전 버전, 한 번 더 새로고침해야 새 버전**이 뜬다.
@@ -59,6 +59,11 @@ cache-first 방식이라, 배포 후 기존 사용자는 **첫 새로고침엔 �
   인트로 '이어서 작성' 카드(채권자·단계·저장시각). **다른 기기 이어가기**: 초안을 Dropbox `/easy-loan-note-draft.json`에
   자동 동기화(입력 4초 debounce 업로드, 앱 시작 시 원격이 더 최신이고 인트로 상태면 채택). 완료·초기화 시 원격 초안 삭제.
   **파일 이동**: '초안 파일로 저장'(type:easy-loan-note-draft) / '초안 파일 불러오기'로 Dropbox 없이도 전달·이어가기.
+- **Dropbox 공유 링크(v37)**: 완료 화면 '공유 링크 만들기' — 계약 PDF를 Dropbox `/shared/<계약번호>-<시각>.pdf`(ASCII 경로)에
+  업로드 후 `sharing/create_shared_link_with_settings`로 **만료 없는 링크** 생성. 기본으로 무작위 8자리 **비밀번호** 보호
+  (`requested_visibility:password` + `link_password`, 혼동 문자 제외). 카톡 다운로드 기간 만료 문제 해결용 — 링크·비밀번호를
+  따로 전달. 비밀번호 미지원 응답이면 공개 링크로 자동 폴백(경고 표시). `sharing.write` 스코프 필요 — 없으면 콘솔에서 켜고
+  재연결 안내(missing_scope). 필요 없어지면 Dropbox `/shared` 폴더에서 파일 삭제 시 링크 차단.
 
 ## ⚠️ Dropbox 연동 메모 (v20)
 - 인증: Authorization Code + PKCE (서버·client_secret 불필요). App Key는 사용자가 보관함 UI에 직접 입력.
