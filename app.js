@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v38";
+const APP_VERSION = "v39";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -1290,19 +1290,51 @@ function generateLinkPassword() {
   return out;
 }
 
-// 긴 Dropbox 링크를 무료 단축 서비스(is.gd·v.gd)로 줄인다. 실패하면 "" 반환(원본 사용).
-// 브라우저에서 직접 호출하므로 CORS를 지원하는 서비스만 사용. 최선 노력(best-effort).
+// 긴 Dropbox 링크를 무료 단축 서비스로 줄인다. 실패하면 "" 반환(원본 링크 사용).
+// 브라우저에서 직접 호출하므로 CORS를 지원하는 무키(no-key) 서비스만, 여러 곳을 순서대로 시도.
+// 되는 서비스가 하나라도 있으면 그 결과를 쓰고, 전부 막히면 원본을 그대로 쓴다. 최선 노력(best-effort).
 async function shortenUrl(longUrl) {
-  const endpoints = [
-    "https://is.gd/create.php?format=simple&url=" + encodeURIComponent(longUrl),
-    "https://v.gd/create.php?format=simple&url=" + encodeURIComponent(longUrl),
+  const enc = encodeURIComponent(longUrl);
+  // 단순 요청(preflight 없음): form-urlencoded POST / GET + 허용 헤더만 사용
+  const providers = [
+    // cleanuri: POST form → { result_url }
+    async () => {
+      const res = await fetch("https://cleanuri.com/api/v1/shorten", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "url=" + enc,
+      });
+      if (!res.ok) return "";
+      const j = await res.json();
+      return (j && j.result_url) || "";
+    },
+    // spoo.me: POST form(Accept json) → { short_url }
+    async () => {
+      const res = await fetch("https://spoo.me/", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+        body: "url=" + enc,
+      });
+      if (!res.ok) return "";
+      const j = await res.json();
+      return (j && j.short_url) || "";
+    },
+    // is.gd: GET simple → 평문 URL
+    async () => {
+      const res = await fetch("https://is.gd/create.php?format=simple&url=" + enc);
+      return res.ok ? (await res.text()).trim() : "";
+    },
+    // v.gd: GET simple → 평문 URL
+    async () => {
+      const res = await fetch("https://v.gd/create.php?format=simple&url=" + enc);
+      return res.ok ? (await res.text()).trim() : "";
+    },
   ];
-  for (const ep of endpoints) {
+  for (const provider of providers) {
     try {
-      const res = await fetch(ep);
-      if (!res.ok) continue;
-      const text = (await res.text()).trim();
-      if (/^https?:\/\/\S+$/.test(text)) return text;
+      const short = await provider();
+      // 유효한 http(s) URL이고 원본보다 실제로 짧을 때만 채택
+      if (/^https?:\/\/\S+$/.test(short) && short.length < longUrl.length) return short;
     } catch {
       // 다음 후보 서비스로
     }
