@@ -497,6 +497,24 @@ h3 {
   color: var(--red);
 }
 
+.share-config {
+  margin-top: 8px;
+}
+
+.linklike {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--label3);
+  font-size: 12.5px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.linklike:hover {
+  color: var(--blue);
+}
+
 .workspace {
   overflow: clip;
 }

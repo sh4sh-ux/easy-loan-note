@@ -1,7 +1,7 @@
 "use strict";
 
 // 화면에 표시하는 버전(진실의 원천). 버전 올릴 때 index.html·service-worker.js와 함께 갱신.
-const APP_VERSION = "v39";
+const APP_VERSION = "v40";
 const STORAGE_KEY = "easy-loan-note:draft:v3";
 const COMPLETED_STORAGE_KEY = "easy-loan-note:completed:v3";
 const ARCHIVE_KEY = "easy-loan-note:archive:v1";
@@ -331,6 +331,9 @@ function handleDocumentClick(event) {
       break;
     case "share-link":
       createShareLink(button);
+      break;
+    case "tinyurl-setup":
+      setupTinyurlToken();
       break;
     case "download-html":
       downloadFinalHtml();
@@ -938,6 +941,7 @@ const DBX_TOKEN_KEY = "easy-loan-note:dbx:token";
 const DBX_ACCOUNT_KEY = "easy-loan-note:dbx:account";
 const DBX_VERIFIER_KEY = "easy-loan-note:dbx:verifier";
 const DBX_LASTSYNC_KEY = "easy-loan-note:dbx:lastsync";
+const TINYURL_TOKEN_KEY = "easy-loan-note:tinyurl:token";
 // App folder 스코프이므로 이 경로는 실제로 /Apps/<앱>/ 아래에 매핑됨. ASCII만 사용(한글 헤더 문제 회피).
 const DBX_ARCHIVE_PATH = "/easy-loan-note-archive.json";
 
@@ -1342,6 +1346,69 @@ async function shortenUrl(longUrl) {
   return "";
 }
 
+// TinyURL API v2 (토큰 필요). { url } 또는 { error:"auth"|기타 } 반환.
+async function tinyurlShorten(longUrl, token) {
+  let res;
+  try {
+    res = await fetch("https://api.tinyurl.com/create", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + token,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ url: longUrl }),
+    });
+  } catch (error) {
+    return { error: (error && error.message) || "network" }; // CORS·네트워크 → 무키 폴백으로
+  }
+  if (res.status === 401 || res.status === 403) return { error: "auth" };
+  const text = await res.text().catch(() => "");
+  if (!res.ok) return { error: text || String(res.status) };
+  try {
+    const tiny = JSON.parse(text)?.data?.tiny_url;
+    return tiny ? { url: tiny } : { error: "형식 오류" };
+  } catch {
+    return { error: "형식 오류" };
+  }
+}
+
+// 짧은 링크 얻기: TinyURL 토큰이 있으면 우선 시도(가장 안정적), 실패하면 무키 서비스, 그것도 안 되면 "".
+async function getShortLink(longUrl) {
+  const token = localStorage.getItem(TINYURL_TOKEN_KEY);
+  if (token) {
+    const r = await tinyurlShorten(longUrl, token);
+    if (r.url && r.url.length < longUrl.length) return r.url;
+    if (r.error === "auth") {
+      localStorage.removeItem(TINYURL_TOKEN_KEY);
+      alert("TinyURL 토큰이 유효하지 않아 삭제했습니다. 완료 화면의 '짧은 링크(TinyURL) 설정'에서 다시 등록해 주세요.");
+    }
+    // 그 외 오류(CORS 등)는 조용히 무키 서비스로 폴백
+  }
+  return await shortenUrl(longUrl);
+}
+
+// TinyURL API 토큰 등록/변경/삭제 (localStorage 보관, 이 기기에만).
+function setupTinyurlToken() {
+  const current = localStorage.getItem(TINYURL_TOKEN_KEY) || "";
+  const input = window.prompt(
+    "TinyURL API 토큰을 붙여넣으세요.\n\n" +
+      "발급 방법: tinyurl.com 로그인 → 우측 상단 계정 → API → 'Create token'.\n" +
+      "토큰은 이 기기에만 저장되며 공유 링크를 짧게 만들 때 사용됩니다.\n" +
+      "(비운 채 확인하면 토큰을 삭제하고 원본 링크를 사용합니다.)",
+    current,
+  );
+  if (input === null) return; // 취소
+  const token = input.trim();
+  if (token) {
+    localStorage.setItem(TINYURL_TOKEN_KEY, token);
+    alert("TinyURL 토큰을 저장했어요. 이제 '공유 링크 만들기'를 누르면 짧은 링크로 만들어집니다.");
+  } else {
+    localStorage.removeItem(TINYURL_TOKEN_KEY);
+    alert("TinyURL 토큰을 삭제했어요. 앞으로는 원본 링크를 사용합니다.");
+  }
+}
+
 async function createShareLink(button) {
   if (!dbxConnected()) {
     alert("먼저 보관함(⋯)에서 Dropbox를 연결해 주세요.");
@@ -1397,7 +1464,7 @@ async function createShareLink(button) {
 
     // 링크 단축(최선 노력) — 실패하면 원본 링크 그대로 사용
     button.textContent = "링크 줄이는 중…";
-    const shortUrl = await shortenUrl(result.url);
+    const shortUrl = await getShortLink(result.url);
 
     renderShareLinkResult(shortUrl || result.url, password, Boolean(shortUrl));
   } catch (error) {
