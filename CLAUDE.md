@@ -39,7 +39,7 @@ git push origin main
 4. `app.js` 상단의 `APP_VERSION`(예: `"v21"`) — 화면 좌상단 제목 옆 버전 칩에 표시됨
 
 형식은 정수 하나씩 증가(v20 → v21 → v22 ...). 소수점(v2.0) 아님.
-현재 버전: **v38**. (다음에 고치면 v39로)
+현재 버전: **v39**. (다음에 고치면 v40으로)
 
 ## ⚠️ 서비스워커 캐시 — 새로고침 두 번
 cache-first 방식이라, 배포 후 기존 사용자는 **첫 새로고침엔 이전 버전, 한 번 더 새로고침해야 새 버전**이 뜬다.
@@ -69,6 +69,10 @@ cache-first 방식이라, 배포 후 기존 사용자는 **첫 새로고침엔 �
   그대로 노출. (2) **링크 단축** — 생성된 Dropbox 링크를 무료 단축 서비스(is.gd→v.gd, CORS 지원)로 줄임(`shortenUrl`,
   최선 노력·실패 시 원본 링크 사용). 제3자 단축 서비스가 (비밀번호 걸린) 링크를 보게 되는 트레이드오프 있음. 경로 stamp에
   초(seconds) 추가로 동일 분 내 재생성 시 경로 충돌 방지.
+- **단축 서비스 다중화(v39)**: v38의 is.gd 단독이 브라우저 CORS에서 실패(원본 링크로 폴백)해, 무키·CORS 지원 서비스를
+  여러 곳 순서대로 시도하도록 `shortenUrl` 재작성: cleanuri(POST form→result_url) → spoo.me(POST form→short_url) →
+  is.gd → v.gd. 전부 form-urlencoded/GET+허용 헤더라 preflight 없음. 유효 http(s)이고 원본보다 짧을 때만 채택, 하나라도
+  되면 사용·전부 막히면 원본. (샌드박스 egress가 단축 호스트를 403으로 막아 CORS는 실브라우저에서만 검증 가능.)
 
 ## ⚠️ Dropbox 연동 메모 (v20)
 - 인증: Authorization Code + PKCE (서버·client_secret 불필요). App Key는 사용자가 보관함 UI에 직접 입력.
